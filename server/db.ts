@@ -17,6 +17,25 @@ export function openDatabase() {
 
 function migrate(db: DatabaseSync) {
   db.exec(`
+    CREATE TABLE IF NOT EXISTS players (
+      id TEXT PRIMARY KEY,
+      display_name TEXT NOT NULL,
+      name_key TEXT,
+      kind TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS player_sessions (
+      id TEXT PRIMARY KEY,
+      player_id TEXT NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+      token_hash TEXT NOT NULL UNIQUE,
+      created_at TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      last_seen_at TEXT NOT NULL,
+      user_agent TEXT
+    );
+
     CREATE TABLE IF NOT EXISTS game_runs (
       id TEXT PRIMARY KEY,
       player_type TEXT NOT NULL,
@@ -136,6 +155,23 @@ function migrate(db: DatabaseSync) {
       created_at TEXT NOT NULL
     );
   `);
+
+  ensureColumn(db, 'players', 'name_key', 'TEXT');
+  ensureColumn(db, 'game_runs', 'player_id', 'TEXT REFERENCES players(id) ON DELETE SET NULL');
+  ensureColumn(db, 'game_runs', 'run_name', 'TEXT');
+  ensureColumn(db, 'game_runs', 'version', 'INTEGER NOT NULL DEFAULT 0');
+  db.exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_players_kind_name_key ON players(kind, name_key) WHERE name_key IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS idx_game_runs_player_id ON game_runs(player_id, updated_at);
+    CREATE INDEX IF NOT EXISTS idx_player_sessions_token_hash ON player_sessions(token_hash);
+    CREATE INDEX IF NOT EXISTS idx_player_sessions_player_id ON player_sessions(player_id);
+  `);
+}
+
+function ensureColumn(db: DatabaseSync, tableName: string, columnName: string, columnDefinition: string) {
+  const columns = db.prepare(`PRAGMA table_info(${tableName})`).all() as Array<{ name: string }>;
+  if (columns.some((column) => column.name === columnName)) return;
+  db.exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${columnDefinition}`);
 }
 
 export function json<T>(value: T): string {

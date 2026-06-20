@@ -1,4 +1,4 @@
-import type { PlayerActions, DayResult, RunObservation } from '../types';
+import type { PlayerActions, DayResult, PlayerProfile, RunObservation } from '../types';
 import { GameState } from '../game/GameState';
 import { ShopRenderer } from '../render/ShopRenderer';
 import { UIManager } from '../ui/UIManager';
@@ -17,8 +17,9 @@ export class GameController {
   private environmentEngine = new EnvironmentSignalEngine();
   private dayContextClient = new LLMDayContextClient();
   private readonly liveDaySequenceMs = 4400;
-  private readonly runStorageKey = 'kirana.activeRunId';
+  private readonly legacyRunStorageKey = 'kirana.activeRunId';
   private runId?: string;
+  private player?: PlayerProfile;
   private currentReportState?: GameState;
   private pendingActions: PlayerActions = {
     orders: {},
@@ -43,17 +44,25 @@ export class GameController {
       (actions) => { void this.onPlayerAction(actions); },
       (actions) => this.onPlanChange(actions),
       () => this.showFinalScoreboard(),
-      () => { void this.showAIReplay(); }
+      () => { void this.showAIReplay(); },
+      (playerName) => { void this.loginAndStart(playerName); },
+      () => { void this.logoutPlayer(); }
     );
   }
 
   private showOpening() {
+    this.ui.setPlayerProfile(this.player);
     this.ui.showOpeningScreen();
     this.renderer.render(this.state);
   }
 
   private async onPlayerAction(actions: PlayerActions) {
     if (!this.hasStarted) {
+      if (!this.player) {
+        this.ui.setLoginError('Enter your player name first.');
+        this.showOpening();
+        return;
+      }
       if (this.isStartingRun) return;
       this.isStartingRun = true;
       try {
@@ -109,7 +118,7 @@ export class GameController {
 
     try {
       await this.ensureRun();
-      const response = await this.backendClient.stepRun(this.runId!, this.pendingActions);
+      const response = await this.backendClient.stepRun(this.runId!, this.pendingActions, this.state.day);
 
       if (!response.result) {
         this.applyObservation(response.observation);
@@ -182,7 +191,7 @@ export class GameController {
   }
 
   private showFinalScoreboard() {
-    window.localStorage.removeItem(this.runStorageKey);
+    this.removeStoredRunId();
     this.ui.showFinalScoreboard(this.state);
     this.renderer.render(this.state);
   }
@@ -225,27 +234,47 @@ export class GameController {
 
   private async ensureRun() {
     if (this.runId) return;
-    const observation = await this.backendClient.createRun('human');
+    if (!this.player) throw new Error('Player login required');
+    const observation = await this.backendClient.createRun('human', `${this.player.displayName}'s Kirana Run`);
     this.applyObservation(observation);
-    window.localStorage.setItem(this.runStorageKey, observation.runId);
+    this.storeRunId(observation.runId);
   }
 
   private applyObservation(observation: RunObservation) {
     this.runId = observation.runId;
+    if (observation.player) {
+      this.player = observation.player;
+      this.ui.setPlayerProfile(observation.player);
+    }
     this.state = GameState.fromSerialized(observation.state);
     this.ui.setMarketingPipeline(observation.activeMarketing);
   }
 
   private async restoreOrShowOpening() {
-    const storedRunId = window.localStorage.getItem(this.runStorageKey);
-    if (!storedRunId) {
+    const session = await this.backendClient.getMe();
+    if (!session.authenticated || !session.player) {
+      this.player = undefined;
+      this.runId = undefined;
+      window.localStorage.removeItem(this.legacyRunStorageKey);
+      this.ui.setPlayerProfile(undefined);
+      this.showOpening();
+      return;
+    }
+
+    this.player = session.player;
+    this.ui.setPlayerProfile(session.player);
+    const storedRunId = window.localStorage.getItem(this.getRunStorageKey(session.player.id));
+    const fallbackRunId = session.runs.find((run) => run.status === 'active')?.id;
+    const runIdToRestore = storedRunId ?? fallbackRunId;
+    if (!runIdToRestore) {
       this.showOpening();
       return;
     }
 
     try {
-      const observation = await this.backendClient.getState(storedRunId);
+      const observation = await this.backendClient.getState(runIdToRestore);
       this.applyObservation(observation);
+      this.storeRunId(observation.runId);
       this.hasStarted = true;
       this.isInitialStocking = observation.state.history.length === 0 && !observation.done;
 
@@ -274,9 +303,73 @@ export class GameController {
 
       this.showOpening();
     } catch {
-      window.localStorage.removeItem(this.runStorageKey);
+      this.removeStoredRunId();
       this.showOpening();
     }
+  }
+
+  private async loginAndStart(playerName: string) {
+    const trimmedName = playerName.replace(/\s+/g, ' ').trim();
+    if (!trimmedName) {
+      this.ui.setLoginError('Enter a player name to start.');
+      this.showOpening();
+      return;
+    }
+
+    try {
+      this.ui.setLoginError(undefined);
+      const session = await this.backendClient.loginPlayer(trimmedName);
+      if (!session.authenticated || !session.player) throw new Error('Player login failed');
+
+      this.player = session.player;
+      this.ui.setPlayerProfile(session.player);
+      this.runId = undefined;
+      this.hasStarted = false;
+      this.isInitialStocking = false;
+      this.currentReportState = undefined;
+      this.pendingActions = this.createEmptyPlan();
+      await this.onPlayerAction(this.pendingActions);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.ui.setLoginError(message);
+      this.showOpening();
+    }
+  }
+
+  private async logoutPlayer() {
+    const playerId = this.player?.id;
+    try {
+      await this.backendClient.logoutPlayer();
+    } catch {
+      // Local logout should still reset the current browser session view.
+    }
+
+    if (playerId) window.localStorage.removeItem(this.getRunStorageKey(playerId));
+    window.localStorage.removeItem(this.legacyRunStorageKey);
+    this.player = undefined;
+    this.runId = undefined;
+    this.currentReportState = undefined;
+    this.pendingActions = this.createEmptyPlan();
+    this.state = new GameState();
+    this.hasStarted = false;
+    this.isInitialStocking = false;
+    this.ui.setPlayerProfile(undefined);
+    this.ui.setLoginError(undefined);
+    this.showOpening();
+  }
+
+  private getRunStorageKey(playerId = this.player?.id): string {
+    return playerId ? `kirana.activeRunId.${playerId}` : this.legacyRunStorageKey;
+  }
+
+  private storeRunId(runId: string) {
+    window.localStorage.setItem(this.getRunStorageKey(), runId);
+    window.localStorage.removeItem(this.legacyRunStorageKey);
+  }
+
+  private removeStoredRunId() {
+    window.localStorage.removeItem(this.getRunStorageKey());
+    window.localStorage.removeItem(this.legacyRunStorageKey);
   }
 
   private showBackendError(error: unknown) {

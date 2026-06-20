@@ -6644,6 +6644,97 @@ input[type="range"]::-moz-range-thumb {
   font-size: 15px;
 }
 
+.intro-player-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 0.72fr);
+  gap: 14px;
+  align-items: center;
+  padding: 14px;
+  border: 1px solid rgba(20,184,166,0.32);
+  border-radius: 12px;
+  background:
+    linear-gradient(135deg, rgba(240,253,250,0.96), rgba(255,255,255,0.9));
+}
+
+.intro-player-card.signed-in {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.intro-player-card span,
+.intro-name-field span {
+  display: block;
+  color: var(--profit);
+  font-size: 12px;
+  font-weight: 950;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.intro-player-card strong {
+  display: block;
+  margin-top: 6px;
+  color: var(--charcoal);
+  font-size: 24px;
+  font-weight: 950;
+  line-height: 1.12;
+}
+
+.intro-player-card em {
+  display: block;
+  margin-top: 5px;
+  color: var(--slate);
+  font-size: 14px;
+  font-style: normal;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.intro-name-field {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.intro-name-field input {
+  min-width: 0;
+  height: 48px;
+  padding: 0 14px;
+  border: 1px solid rgba(148,163,184,0.55);
+  border-radius: 9px;
+  background: #FFFFFF;
+  color: var(--charcoal);
+  font-size: 17px;
+  font-weight: 850;
+  outline: none;
+}
+
+.intro-name-field input:focus {
+  border-color: rgba(20,184,166,0.78);
+  box-shadow: 0 0 0 4px rgba(20,184,166,0.14);
+}
+
+.intro-session-badge {
+  padding: 10px 12px;
+  border: 1px solid rgba(16,185,129,0.28);
+  border-radius: 999px;
+  background: rgba(16,185,129,0.1);
+  color: var(--success);
+  font-size: 12px;
+  font-weight: 950;
+  white-space: nowrap;
+  text-transform: uppercase;
+}
+
+.intro-login-error {
+  margin-top: 8px;
+  color: var(--danger);
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1.25;
+}
+
 .intro-shop-panel {
   display: grid;
   gap: 14px;
@@ -6819,6 +6910,7 @@ input[type="range"]::-moz-range-thumb {
   .intro-shell { grid-template-columns: 1fr; }
   .intro-stat-grid,
   .intro-loop-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .intro-player-card { grid-template-columns: 1fr; }
   .intro-shop-panel { align-content: stretch; }
   .case-header { grid-template-columns: 1fr; }
   .gameplay-tabs { grid-template-columns: 1fr; }
@@ -6893,6 +6985,7 @@ input[type="range"]::-moz-range-thumb {
   .intro-stat-grid,
   .intro-loop-grid,
   .intro-shelf { grid-template-columns: 1fr; }
+  .intro-name-field { grid-template-columns: 1fr; }
   .intro-action-row .btn {
     width: 100%;
     min-width: 0;

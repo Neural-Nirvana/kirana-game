@@ -9,19 +9,26 @@ import { openDatabase } from './db';
 import { loadLocalEnv } from './env';
 import { normalizeActions } from './marketing-engine';
 import { RunStore } from './run-store';
+import { normalizeDisplayName, SessionStore, type AuthenticatedPlayerSession } from './session-store';
 
 loadLocalEnv();
 
+const SESSION_COOKIE = 'kirana_session';
 const app = Fastify({ logger: true });
 const db = openDatabase();
 const store = new RunStore(db);
+const sessions = new SessionStore(db);
 const port = Number(process.env.KIRANA_SERVER_PORT ?? 8787);
 const host = process.env.KIRANA_SERVER_HOST ?? '127.0.0.1';
 const staticRoot = resolve(process.cwd(), process.env.KIRANA_STATIC_ROOT ?? 'dist');
 
 app.setErrorHandler((error, _request, reply) => {
   const message = error.message || 'Request failed';
-  const statusCode = message.includes('not found') || message.includes('Not found') ? 404 : 400;
+  const statusCode = 'statusCode' in error && typeof error.statusCode === 'number'
+    ? error.statusCode
+    : message.includes('not found') || message.includes('Not found')
+      ? 404
+      : 400;
   reply.status(statusCode).send({ error: message });
 });
 
@@ -31,26 +38,89 @@ app.get('/api/health', async () => ({
   db: process.env.KIRANA_DB_PATH ?? 'data/kirana.sqlite',
 }));
 
+app.get('/api/me', async (request) => {
+  const session = getSession(request);
+  if (!session) {
+    return {
+      authenticated: false,
+      runs: [],
+    };
+  }
+
+  return {
+    authenticated: true,
+    player: session.player,
+    runs: sessions.listRuns(session.player.id),
+  };
+});
+
+app.post('/api/auth/player', async (request, reply) => {
+  const body = request.body as { playerName?: string } | undefined;
+  const displayName = normalizeDisplayName(body?.playerName);
+  const session = sessions.createPlayerSession(displayName, request.headers['user-agent']);
+  reply.header('Set-Cookie', buildSessionCookie(session.token, session.expiresAt));
+
+  return {
+    authenticated: true,
+    player: session.player,
+    runs: sessions.listRuns(session.player.id),
+  };
+});
+
+app.post('/api/auth/logout', async (request, reply) => {
+  sessions.deleteSessionByToken(getCookie(request.headers.cookie, SESSION_COOKIE));
+  reply.header('Set-Cookie', clearSessionCookie());
+  return {
+    authenticated: false,
+    runs: [],
+  };
+});
+
+app.get('/api/me/runs', async (request) => {
+  const session = requireSession(request);
+  return {
+    player: session.player,
+    runs: sessions.listRuns(session.player.id),
+  };
+});
+
 app.post('/api/runs', async (request) => {
-  const body = request.body as { playerType?: 'human' | 'ai' } | undefined;
-  return store.createRun(body?.playerType ?? 'human');
+  const session = requireSession(request);
+  const body = request.body as { playerType?: 'human' | 'ai'; runName?: string } | undefined;
+  const playerType = body?.playerType ?? 'human';
+  if (playerType !== 'human') {
+    throw httpError('Human sessions can only create human runs', 403);
+  }
+  return store.createRun('human', {
+    playerId: session.player.id,
+    runName: body?.runName ?? `${session.player.displayName}'s Kirana Run`,
+  });
 });
 
 app.get('/api/runs/:runId/state', async (request) => {
+  const session = requireSession(request);
   const { runId } = request.params as { runId: string };
-  return store.getObservation(runId);
+  return store.getObservation(runId, session.player.id);
 });
 
 app.post('/api/runs/:runId/step', async (request) => {
+  const session = requireSession(request);
   const { runId } = request.params as { runId: string };
-  const body = request.body as Partial<PlayerActions> | { actions?: Partial<PlayerActions> } | undefined;
+  const body = request.body as Partial<PlayerActions> | { actions?: Partial<PlayerActions>; expectedDay?: number } | undefined;
   const actions = body && 'actions' in body ? body.actions : body;
-  return store.stepRun(runId, actions ?? {});
+  const expectedDay = body && 'expectedDay' in body && typeof body.expectedDay === 'number'
+    ? body.expectedDay
+    : undefined;
+  return store.stepRun(runId, actions ?? {}, {
+    playerId: session.player.id,
+    expectedDay,
+  });
 });
 
 app.get('/api/runs/:runId/timeline', async (request) => {
+  const session = requireSession(request);
   const { runId } = request.params as { runId: string };
-  return { runId, timeline: store.getTimeline(runId) };
+  return { runId, timeline: store.getTimeline(runId, session.player.id) };
 });
 
 app.post('/api/openenv/reset', async () => {
@@ -67,7 +137,7 @@ app.post('/api/openenv/reset', async () => {
 app.post('/api/openenv/step', async (request) => {
   const body = request.body as { episode_id?: string; action?: Partial<PlayerActions> } | undefined;
   if (!body?.episode_id) throw new Error('episode_id is required');
-  const response = store.stepRun(body.episode_id, body.action ?? {});
+  const response = store.stepOpenEnvRun(body.episode_id, body.action ?? {});
   return {
     observation: response.observation,
     reward: response.result?.rewardBreakdown.total ?? 0,
@@ -84,7 +154,7 @@ app.post('/api/openenv/step', async (request) => {
 app.get('/api/openenv/state', async (request) => {
   const query = request.query as { episode_id?: string };
   if (!query.episode_id) throw new Error('episode_id is required');
-  const observation = store.getObservation(query.episode_id);
+  const observation = store.getOpenEnvObservation(query.episode_id);
   return {
     episode_id: observation.runId,
     observation,
@@ -102,7 +172,7 @@ app.post('/api/ai-runs', async (request) => {
 
 app.get('/api/ai-runs/:runId', async (request) => {
   const { runId } = request.params as { runId: string };
-  const observation = store.getObservation(runId);
+  const observation = store.getAiObservation(runId);
   return {
     runId,
     observation,
@@ -136,7 +206,11 @@ if (process.env.KIRANA_SERVE_STATIC !== 'false' && existsSync(staticRoot)) {
 }
 
 function runAiBenchmark(profile: string, model: string) {
-  const observation = store.createRun('ai');
+  const player = sessions.ensureSystemPlayer(`AI ${profile}`, 'ai');
+  const observation = store.createRun('ai', {
+    playerId: player.id,
+    runName: `AI ${profile} benchmark`,
+  });
   const aiPlayerId = store.createAiPlayer(observation.runId, `AI ${profile}`, model, { profile });
   let current = observation;
 
@@ -190,6 +264,42 @@ function runAiBenchmark(profile: string, model: string) {
       daysCompleted: finalState.history.length,
     },
   };
+}
+
+function getSession(request: { headers: { cookie?: string } }): AuthenticatedPlayerSession | undefined {
+  return sessions.getSessionByToken(getCookie(request.headers.cookie, SESSION_COOKIE));
+}
+
+function requireSession(request: { headers: { cookie?: string } }): AuthenticatedPlayerSession {
+  const session = getSession(request);
+  if (!session) throw httpError('Player login required', 401);
+  return session;
+}
+
+function getCookie(cookieHeader: string | undefined, name: string): string | undefined {
+  if (!cookieHeader) return undefined;
+  for (const part of cookieHeader.split(';')) {
+    const [rawKey, ...rawValue] = part.trim().split('=');
+    if (rawKey === name) return decodeURIComponent(rawValue.join('='));
+  }
+  return undefined;
+}
+
+function buildSessionCookie(token: string, expiresAt: string): string {
+  const secure = process.env.KIRANA_COOKIE_SECURE === 'true' ? '; Secure' : '';
+  const maxAge = Math.max(0, Math.floor((new Date(expiresAt).getTime() - Date.now()) / 1000));
+  return `${SESSION_COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${secure}`;
+}
+
+function clearSessionCookie(): string {
+  const secure = process.env.KIRANA_COOKIE_SECURE === 'true' ? '; Secure' : '';
+  return `${SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure}`;
+}
+
+function httpError(message: string, statusCode: number) {
+  const error = new Error(message) as Error & { statusCode: number };
+  error.statusCode = statusCode;
+  return error;
 }
 
 function buildHeuristicAction(observation: RunObservation, profile: string): PlayerActions {

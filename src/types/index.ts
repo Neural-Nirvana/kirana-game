@@ -375,6 +375,8 @@ export interface SerializedGameState {
 export interface RunObservation {
   runId: string;
   playerType: 'human' | 'ai';
+  player?: PlayerProfile;
+  runName?: string;
   state: SerializedGameState;
   visibleState: VisibleState;
   done: boolean;
@@ -391,6 +393,30 @@ export interface StepRunResponse {
   observation: RunObservation;
   log?: DayLog;
   result?: DayResult;
+}
+
+export interface PlayerProfile {
+  id: string;
+  displayName: string;
+  kind: 'human' | 'ai' | 'system';
+  createdAt: string;
+}
+
+export interface PlayerRunSummary {
+  id: string;
+  runName?: string;
+  playerType: 'human' | 'ai';
+  status: string;
+  currentDay: number;
+  totalScore: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PlayerSessionResponse {
+  authenticated: boolean;
+  player?: PlayerProfile;
+  runs: PlayerRunSummary[];
 }
 
 export interface LLMDayContext {

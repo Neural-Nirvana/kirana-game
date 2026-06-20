@@ -1,4 +1,4 @@
-import type { ProductId, PlayerActions, DayResult, VisibleState, CustomerOrderLine, CustomerProfile, CustomerVisit, PerishabilitySnapshot, ProductInventory, LLMDayContext, MarketingCampaignInstance, MarketingCampaignSpec } from '../types';
+import type { ProductId, PlayerActions, DayResult, VisibleState, CustomerOrderLine, CustomerProfile, CustomerVisit, PerishabilitySnapshot, ProductInventory, LLMDayContext, MarketingCampaignInstance, MarketingCampaignSpec, PlayerProfile } from '../types';
 import { GameState } from '../game/GameState';
 import { PRODUCTS, DEFAULT_CONFIG } from '../constants/products';
 import { MARKETING_CAMPAIGNS, getMarketingCampaign } from '../constants/marketing';
@@ -76,25 +76,42 @@ export class UIManager {
   private onPlanChange: (actions: PlayerActions) => void;
   private onNextDay: () => void;
   private onShowAIReplay: () => void;
+  private onPlayerLogin: (playerName: string) => void;
+  private onPlayerLogout: () => void;
+  private player?: PlayerProfile;
+  private loginError?: string;
 
   constructor(
     containerId: string,
     onAction: (actions: PlayerActions) => void,
     onPlanChange: (actions: PlayerActions) => void,
     onNextDay: () => void,
-    onShowAIReplay: () => void
+    onShowAIReplay: () => void,
+    onPlayerLogin: (playerName: string) => void,
+    onPlayerLogout: () => void
   ) {
     this.container = document.getElementById(containerId)!;
     this.onAction = onAction;
     this.onPlanChange = onPlanChange;
     this.onNextDay = onNextDay;
     this.onShowAIReplay = onShowAIReplay;
+    this.onPlayerLogin = onPlayerLogin;
+    this.onPlayerLogout = onPlayerLogout;
   }
 
   // ===== SCREENS =====
 
   setMarketingPipeline(activeMarketing: MarketingCampaignInstance[] = []) {
     this.activeMarketing = activeMarketing;
+  }
+
+  setPlayerProfile(player?: PlayerProfile) {
+    this.player = player;
+    if (player) this.loginError = undefined;
+  }
+
+  setLoginError(message?: string) {
+    this.loginError = message;
   }
 
   showLiveDayScreen(day: number, result?: DayResult) {
@@ -289,13 +306,22 @@ export class UIManager {
               </article>
             </div>
 
+            ${this.renderPlayerEntry()}
+
             <div class="intro-action-row">
-              <button class="btn btn-primary" id="btn-start-human">
-                Start with opening stock
-              </button>
+              ${this.player ? `
+                <button class="btn btn-primary" id="btn-start-human">
+                  Start with opening stock
+                </button>
+              ` : ''}
               <button class="btn btn-outline" id="btn-watch-ai">
                 Watch AI benchmark
               </button>
+              ${this.player ? `
+                <button class="btn btn-outline" id="btn-player-logout">
+                  Change player
+                </button>
+              ` : ''}
             </div>
           </section>
 
@@ -323,6 +349,13 @@ export class UIManager {
       </div>
     `;
 
+    document.getElementById('player-login-form')?.addEventListener('submit', (event) => {
+      event.preventDefault();
+      const form = event.currentTarget as HTMLFormElement;
+      const input = form.elements.namedItem('player-name') as HTMLInputElement | null;
+      this.onPlayerLogin(input?.value ?? '');
+    });
+
     document.getElementById('btn-start-human')?.addEventListener('click', () => {
       this.onAction({
         orders: {},
@@ -338,6 +371,57 @@ export class UIManager {
     document.getElementById('btn-watch-ai')?.addEventListener('click', () => {
       this.onShowAIReplay();
     });
+
+    document.getElementById('btn-player-logout')?.addEventListener('click', () => {
+      this.onPlayerLogout();
+    });
+  }
+
+  private renderPlayerEntry(): string {
+    if (this.player) {
+      return `
+        <div class="intro-player-card signed-in">
+          <div>
+            <span>Player session</span>
+            <strong>${this.escapeHtml(this.player.displayName)}</strong>
+            <em>Your runs, inventory, customers, marketing, and score are saved separately.</em>
+          </div>
+          <span class="intro-session-badge">Session saved</span>
+        </div>
+      `;
+    }
+
+    return `
+      <form class="intro-player-card" id="player-login-form">
+        <div>
+          <span>Player name</span>
+          <strong>Start your own shop run</strong>
+          <em>Each player gets a separate saved game, ledger, and history.</em>
+          ${this.loginError ? `<p class="intro-login-error">${this.escapeHtml(this.loginError)}</p>` : ''}
+        </div>
+        <label class="intro-name-field">
+          <input
+            id="player-name"
+            name="player-name"
+            type="text"
+            maxlength="40"
+            autocomplete="name"
+            placeholder="Enter your name"
+            aria-label="Player name"
+          />
+          <button class="btn btn-primary" type="submit">Enter shop</button>
+        </label>
+      </form>
+    `;
+  }
+
+  private escapeHtml(value: string): string {
+    return value
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
   }
 
   private renderIntroShelf(): string {

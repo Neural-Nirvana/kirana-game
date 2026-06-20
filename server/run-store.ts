@@ -29,13 +29,16 @@ type PlayerType = 'human' | 'ai';
 
 interface GameRunRow {
   id: string;
+  player_id: string | null;
   player_type: PlayerType;
+  run_name: string | null;
   status: string;
   current_day: number;
   total_score: number;
   state_json: string;
   created_at: string;
   updated_at: string;
+  version: number;
 }
 
 interface CampaignRow {
@@ -53,28 +56,61 @@ interface CampaignRow {
 export class RunStore {
   constructor(private readonly db: DatabaseSync) {}
 
-  createRun(playerType: PlayerType = 'human'): RunObservation {
+  createRun(
+    playerType: PlayerType = 'human',
+    options: { playerId?: string; runName?: string } = {}
+  ): RunObservation {
     const now = new Date().toISOString();
     const state = new GameState();
     const runId = randomUUID();
     this.db.prepare(`
-      INSERT INTO game_runs (id, player_type, status, current_day, total_score, state_json, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(runId, playerType, 'active', state.day, 0, json(state.toSerialized()), now, now);
+      INSERT INTO game_runs
+        (id, player_id, player_type, run_name, status, current_day, total_score, state_json, created_at, updated_at, version)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      runId,
+      options.playerId ?? null,
+      playerType,
+      options.runName ?? null,
+      'active',
+      state.day,
+      0,
+      json(state.toSerialized()),
+      now,
+      now,
+      0
+    );
     this.persistCustomerState(runId, state);
-    return this.getObservation(runId);
+    return this.getObservation(runId, options.playerId);
   }
 
-  getObservation(runId: string): RunObservation {
+  getObservation(runId: string, playerId?: string): RunObservation {
+    return this.buildObservation(this.getRunRow(runId, { playerId }));
+  }
+
+  getAiObservation(runId: string): RunObservation {
     const row = this.getRunRow(runId);
+    if (row.player_type !== 'ai') throw new Error(`Run not found: ${runId}`);
+    return this.buildObservation(row);
+  }
+
+  getOpenEnvObservation(runId: string): RunObservation {
+    return this.buildObservation(this.getRunRow(runId, { requireUnowned: true }));
+  }
+
+  private buildObservation(row: GameRunRow): RunObservation {
+    const runId = row.id;
     const state = GameState.fromSerialized(parseJson<SerializedGameState>(row.state_json));
     const campaigns = this.getCampaigns(runId);
     const lastLog = state.history[state.history.length - 1];
     const done = state.isGameOver() || row.status === 'complete';
+    const player = row.player_id ? this.getPlayer(row.player_id) : undefined;
 
     return {
       runId,
       playerType: row.player_type,
+      player,
+      runName: row.run_name ?? undefined,
       state: state.toSerialized(),
       visibleState: state.getVisibleState(),
       done,
@@ -87,23 +123,35 @@ export class RunStore {
     };
   }
 
-  getTimeline(runId: string): DayLog[] {
+  getTimeline(runId: string, playerId?: string): DayLog[] {
+    this.getRunRow(runId, { playerId });
     const rows = this.db.prepare(`
       SELECT log_json FROM day_results WHERE run_id = ? ORDER BY day ASC
     `).all(runId) as Array<{ log_json: string }>;
     return rows.map((row) => parseJson<DayLog>(row.log_json));
   }
 
-  stepRun(runId: string, input: Partial<PlayerActions>): StepRunResponse {
-    const row = this.getRunRow(runId);
+  stepRun(
+    runId: string,
+    input: Partial<PlayerActions>,
+    options: { playerId?: string; expectedDay?: number; requireUnowned?: boolean } = {}
+  ): StepRunResponse {
+    const row = this.getRunRow(runId, {
+      playerId: options.playerId,
+      requireUnowned: options.requireUnowned,
+    });
     if (row.status === 'complete') {
       throw new Error('Run is already complete');
     }
 
     const state = GameState.fromSerialized(parseJson<SerializedGameState>(row.state_json));
+    if (options.expectedDay !== undefined && state.day !== options.expectedDay) {
+      throw new Error(`Run is on Day ${state.day}, but the request expected Day ${options.expectedDay}`);
+    }
+
     if (state.isGameOver()) {
       this.markComplete(runId, state);
-      return { runId, observation: this.getObservation(runId) };
+      return { runId, observation: this.getObservation(runId, options.playerId) };
     }
 
     const actions = normalizeActions(input);
@@ -159,10 +207,14 @@ export class RunStore {
 
     return {
       runId,
-      observation: this.getObservation(runId),
+      observation: this.getObservation(runId, options.playerId),
       log,
       result,
     };
+  }
+
+  stepOpenEnvRun(runId: string, input: Partial<PlayerActions>): StepRunResponse {
+    return this.stepRun(runId, input, { requireUnowned: true });
   }
 
   createAiDecision(params: {
@@ -271,16 +323,25 @@ export class RunStore {
       }));
   }
 
-  private getRunRow(runId: string): GameRunRow {
+  private getRunRow(
+    runId: string,
+    options: { playerId?: string; requireUnowned?: boolean } = {}
+  ): GameRunRow {
     const row = this.db.prepare('SELECT * FROM game_runs WHERE id = ?').get(runId) as GameRunRow | undefined;
     if (!row) throw new Error(`Run not found: ${runId}`);
+    if (options.playerId !== undefined && row.player_id !== options.playerId) {
+      throw new Error(`Run not found: ${runId}`);
+    }
+    if (options.requireUnowned && row.player_id !== null) {
+      throw new Error(`Run not found: ${runId}`);
+    }
     return row;
   }
 
   private updateRun(runId: string, state: GameState, status: string) {
     this.db.prepare(`
       UPDATE game_runs
-      SET status = ?, current_day = ?, total_score = ?, state_json = ?, updated_at = ?
+      SET status = ?, current_day = ?, total_score = ?, state_json = ?, updated_at = ?, version = version + 1
       WHERE id = ?
     `).run(status, state.day, state.getTotalScore(), json(state.toSerialized()), new Date().toISOString(), runId);
   }
@@ -402,5 +463,24 @@ export class RunStore {
       cost: row.cost,
       actualResult: row.actual_result_json ? parseJson(row.actual_result_json) : undefined,
     }));
+  }
+
+  private getPlayer(playerId: string) {
+    const row = this.db.prepare(`
+      SELECT id, display_name, kind, created_at FROM players WHERE id = ?
+    `).get(playerId) as {
+      id: string;
+      display_name: string;
+      kind: 'human' | 'ai' | 'system';
+      created_at: string;
+    } | undefined;
+
+    if (!row) return undefined;
+    return {
+      id: row.id,
+      displayName: row.display_name,
+      kind: row.kind,
+      createdAt: row.created_at,
+    };
   }
 }
