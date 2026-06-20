@@ -1,0 +1,848 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kirana Gameplay Section Mockups</title>
+  <style>
+    :root {
+      --bg: #f4efe7;
+      --panel: #ffffff;
+      --panel-soft: #f8fafc;
+      --ink: #172033;
+      --slate: #475569;
+      --muted: #8a97aa;
+      --line: #dde5ef;
+      --green: #0f9f6e;
+      --teal: #0f8f8d;
+      --amber: #c77700;
+      --red: #d92d50;
+      --blue: #2563eb;
+      --wood: #8b4a1d;
+      --shadow: 0 18px 44px rgba(23, 32, 51, 0.12);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        linear-gradient(90deg, rgba(139, 74, 29, 0.08) 0 1px, transparent 1px 100%),
+        linear-gradient(180deg, rgba(139, 74, 29, 0.08) 0 1px, transparent 1px 100%),
+        var(--bg);
+      background-size: 72px 72px;
+    }
+
+    .page {
+      width: min(1440px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 32px 0 56px;
+    }
+
+    .board-title {
+      display: flex;
+      justify-content: space-between;
+      gap: 20px;
+      align-items: end;
+      margin-bottom: 18px;
+    }
+
+    .board-title h1 {
+      margin: 0;
+      font-size: 30px;
+      line-height: 1.08;
+    }
+
+    .board-title p {
+      max-width: 640px;
+      margin: 8px 0 0;
+      color: var(--slate);
+      font-size: 15px;
+      font-weight: 700;
+      line-height: 1.5;
+    }
+
+    .design-pill {
+      flex: 0 0 auto;
+      padding: 10px 12px;
+      border: 1px solid rgba(139, 74, 29, 0.25);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.75);
+      color: var(--wood);
+      font-size: 11px;
+      font-weight: 900;
+      text-transform: uppercase;
+    }
+
+    .mock-frame {
+      margin-top: 18px;
+      padding: 18px;
+      border: 1px solid rgba(23, 32, 51, 0.12);
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.68);
+      box-shadow: var(--shadow);
+    }
+
+    .mock-tabs {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .mock-tab {
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel-soft);
+    }
+
+    .mock-tab.active {
+      border-color: var(--ink);
+      background: var(--ink);
+      color: #fff;
+    }
+
+    .mock-tab span,
+    .eyebrow,
+    .metric span,
+    .small-label {
+      display: block;
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 900;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .mock-tab.active span { color: rgba(255, 255, 255, 0.65); }
+
+    .mock-tab strong {
+      display: block;
+      margin-top: 6px;
+      font-size: 15px;
+      line-height: 1.25;
+    }
+
+    .mock-tab em {
+      display: block;
+      margin-top: 5px;
+      color: inherit;
+      opacity: 0.76;
+      font-size: 11px;
+      font-style: normal;
+      font-weight: 800;
+    }
+
+    .section-panel {
+      padding: 20px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.95);
+    }
+
+    .hero-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 220px 180px;
+      gap: 12px;
+      align-items: stretch;
+    }
+
+    h2, h3, h4, p { margin: 0; }
+
+    h2 {
+      margin-top: 6px;
+      font-size: 28px;
+      line-height: 1.12;
+    }
+
+    .hero-copy p {
+      margin-top: 8px;
+      max-width: 760px;
+      color: var(--slate);
+      font-size: 14px;
+      font-weight: 750;
+      line-height: 1.55;
+    }
+
+    .status-tile,
+    .metric,
+    .weather-card,
+    .item-card,
+    .action-rail,
+    .campaign-card,
+    .ledger-row {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel-soft);
+    }
+
+    .status-tile {
+      padding: 14px;
+    }
+
+    .status-tile strong {
+      display: block;
+      margin-top: 8px;
+      font-size: 23px;
+    }
+
+    .status-tile em {
+      display: block;
+      margin-top: 6px;
+      color: var(--slate);
+      font-size: 11px;
+      font-style: normal;
+      font-weight: 800;
+      line-height: 1.35;
+    }
+
+    .score-tile strong {
+      color: var(--red);
+      font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
+      font-size: 34px;
+      line-height: 1;
+    }
+
+    .metric-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 16px;
+    }
+
+    .metric {
+      padding: 16px;
+      background: #fff;
+      box-shadow: inset 4px 0 0 rgba(37, 99, 235, 0.32);
+    }
+
+    .metric.money { box-shadow: inset 4px 0 0 rgba(15, 159, 110, 0.62); }
+    .metric.items { box-shadow: inset 4px 0 0 rgba(217, 45, 80, 0.62); }
+    .metric.customers { box-shadow: inset 4px 0 0 rgba(37, 99, 235, 0.62); }
+
+    .metric strong {
+      display: block;
+      margin-top: 8px;
+      font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
+      font-size: 38px;
+      line-height: 0.96;
+    }
+
+    .metric.money strong { color: var(--green); }
+    .metric.items strong { color: var(--red); }
+    .metric.customers strong { color: var(--blue); }
+
+    .metric p {
+      margin-top: 10px;
+      color: var(--slate);
+      font-size: 12px;
+      font-weight: 800;
+      line-height: 1.45;
+    }
+
+    .weather-strip {
+      display: grid;
+      grid-template-columns: repeat(7, minmax(0, 1fr));
+      gap: 8px;
+      margin-top: 16px;
+    }
+
+    .weather-card {
+      padding: 10px;
+      background: #fff;
+    }
+
+    .weather-card.hot { border-color: rgba(201, 119, 0, 0.3); background: rgba(201, 119, 0, 0.07); }
+    .weather-card.rain { border-color: rgba(37, 99, 235, 0.26); background: rgba(37, 99, 235, 0.07); }
+    .weather-card.very-hot { border-color: rgba(217, 45, 80, 0.28); background: rgba(217, 45, 80, 0.07); }
+
+    .weather-card strong {
+      display: block;
+      margin-top: 7px;
+      font-size: 14px;
+    }
+
+    .weather-card em {
+      display: block;
+      margin-top: 5px;
+      color: var(--slate);
+      font-size: 11px;
+      font-style: normal;
+      font-weight: 900;
+    }
+
+    .diagnostic-row {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin: 16px 0;
+    }
+
+    .mini-card {
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+    }
+
+    .mini-card strong {
+      display: block;
+      margin-top: 6px;
+      font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
+      font-size: 24px;
+      line-height: 1;
+    }
+
+    .mini-card.good strong { color: var(--green); }
+    .mini-card.warn strong { color: var(--amber); }
+    .mini-card.bad strong { color: var(--red); }
+
+    .inventory-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .item-card {
+      display: grid;
+      gap: 11px;
+      padding: 14px;
+    }
+
+    .item-card.good { border-color: rgba(15, 159, 110, 0.24); background: rgba(15, 159, 110, 0.055); }
+    .item-card.warn { border-color: rgba(201, 119, 0, 0.28); background: rgba(201, 119, 0, 0.07); }
+    .item-card.bad { border-color: rgba(217, 45, 80, 0.3); background: rgba(217, 45, 80, 0.07); }
+
+    .item-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      align-items: flex-start;
+    }
+
+    .item-head strong {
+      font-size: 16px;
+      line-height: 1.15;
+    }
+
+    .pill {
+      flex: 0 0 auto;
+      padding: 5px 7px;
+      border-radius: 999px;
+      background: rgba(23, 32, 51, 0.08);
+      color: var(--slate);
+      font-size: 9px;
+      font-weight: 900;
+      text-transform: uppercase;
+    }
+
+    .bad .pill { background: rgba(217, 45, 80, 0.12); color: var(--red); }
+    .warn .pill { background: rgba(201, 119, 0, 0.13); color: var(--amber); }
+    .good .pill { background: rgba(15, 159, 110, 0.12); color: var(--green); }
+
+    .stock-number {
+      color: var(--ink);
+      font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
+      font-size: 42px;
+      font-weight: 950;
+      line-height: 0.9;
+    }
+
+    .bad .stock-number { color: var(--red); }
+    .warn .stock-number { color: var(--amber); }
+    .good .stock-number { color: var(--green); }
+
+    .fact-row {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 6px;
+    }
+
+    .fact-row div {
+      padding: 8px;
+      border: 1px solid rgba(221, 229, 239, 0.9);
+      border-radius: 7px;
+      background: rgba(255, 255, 255, 0.78);
+    }
+
+    .fact-row strong {
+      display: block;
+      margin-top: 4px;
+      font-size: 13px;
+    }
+
+    .fresh-track {
+      height: 7px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: rgba(138, 151, 170, 0.24);
+    }
+
+    .fresh-track span {
+      display: block;
+      height: 100%;
+      border-radius: inherit;
+      background: var(--green);
+    }
+
+    .warn .fresh-track span { background: var(--amber); }
+    .bad .fresh-track span { background: var(--red); }
+
+    .action-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 330px;
+      gap: 16px;
+      align-items: start;
+    }
+
+    .action-main {
+      display: grid;
+      gap: 14px;
+    }
+
+    .action-lane {
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--panel-soft);
+    }
+
+    .lane-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      align-items: end;
+      margin-bottom: 12px;
+    }
+
+    .lane-head h3 {
+      margin-top: 5px;
+      font-size: 18px;
+    }
+
+    .stock-plan-grid,
+    .campaign-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .plan-row,
+    .campaign-card {
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+    }
+
+    .plan-row.bad { border-color: rgba(217, 45, 80, 0.32); background: rgba(217, 45, 80, 0.06); }
+    .plan-row.warn { border-color: rgba(201, 119, 0, 0.28); background: rgba(201, 119, 0, 0.07); }
+
+    .plan-row strong,
+    .campaign-card strong {
+      display: block;
+      font-size: 15px;
+      line-height: 1.2;
+    }
+
+    .stepper {
+      display: grid;
+      grid-template-columns: 32px 1fr 32px;
+      gap: 7px;
+      align-items: center;
+      margin-top: 12px;
+    }
+
+    .stepper button {
+      height: 32px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: var(--panel-soft);
+      color: var(--ink);
+      font-weight: 900;
+    }
+
+    .stepper span {
+      display: block;
+      padding: 8px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: #fff;
+      text-align: center;
+      font-weight: 950;
+    }
+
+    .campaign-card.selected {
+      border-color: rgba(15, 143, 141, 0.36);
+      background: rgba(15, 143, 141, 0.07);
+    }
+
+    .campaign-card p,
+    .plan-row p {
+      margin-top: 7px;
+      color: var(--slate);
+      font-size: 12px;
+      font-weight: 800;
+      line-height: 1.4;
+    }
+
+    .action-rail {
+      position: sticky;
+      top: 16px;
+      display: grid;
+      gap: 10px;
+      padding: 14px;
+      background: #fff;
+    }
+
+    .rail-hero {
+      padding: 14px;
+      border: 1px solid rgba(15, 159, 110, 0.24);
+      border-radius: 8px;
+      background: rgba(15, 159, 110, 0.07);
+    }
+
+    .rail-hero strong {
+      display: block;
+      margin-top: 8px;
+      color: var(--green);
+      font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
+      font-size: 36px;
+      line-height: 1;
+    }
+
+    .rail-grid {
+      display: grid;
+      gap: 8px;
+    }
+
+    .rail-grid div {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 10px;
+      border-radius: 8px;
+      background: var(--panel-soft);
+    }
+
+    .primary-action {
+      width: 100%;
+      min-height: 46px;
+      border: 0;
+      border-radius: 8px;
+      background: var(--green);
+      color: #fff;
+      font-size: 13px;
+      font-weight: 950;
+      text-transform: uppercase;
+    }
+
+    .ledger {
+      display: grid;
+      gap: 8px;
+      margin-top: 16px;
+    }
+
+    .ledger-row {
+      display: grid;
+      grid-template-columns: 190px 1fr 110px;
+      gap: 12px;
+      padding: 12px;
+      background: #fff;
+    }
+
+    .ledger-row.muted { opacity: 0.62; }
+    .ledger-row.bad { border-color: rgba(217, 45, 80, 0.34); background: rgba(217, 45, 80, 0.06); }
+    .ledger-row.warn { border-color: rgba(201, 119, 0, 0.3); background: rgba(201, 119, 0, 0.07); }
+
+    .ledger-row strong { display: block; font-size: 13px; }
+    .ledger-row span { color: var(--slate); font-size: 12px; font-weight: 750; line-height: 1.4; }
+
+    @media (max-width: 1100px) {
+      .hero-row,
+      .metric-grid,
+      .action-layout,
+      .stock-plan-grid,
+      .campaign-grid,
+      .inventory-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .weather-strip,
+      .diagnostic-row {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .action-rail {
+        position: static;
+      }
+    }
+
+    @media (max-width: 720px) {
+      .page { width: min(100% - 20px, 1440px); padding-top: 18px; }
+      .board-title,
+      .lane-head { flex-direction: column; align-items: flex-start; }
+      .mock-tabs,
+      .weather-strip,
+      .diagnostic-row,
+      .fact-row { grid-template-columns: 1fr; }
+      .ledger-row { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <div class="board-title">
+      <div>
+        <h1>Kirana Gameplay UI Mockups</h1>
+        <p>Target hierarchy for the playable loop: read signals, inspect stock, then commit actions. The visual mood is clean Indian general store operations, not a marketing landing page.</p>
+      </div>
+      <div class="design-pill">Three focused sections</div>
+    </div>
+
+    <section class="mock-frame" aria-label="Insights mockup">
+      <div class="mock-tabs">
+        <div class="mock-tab active"><span>Section 1</span><strong>Insights</strong><em>What happened and what the street is signaling</em></div>
+        <div class="mock-tab"><span>Section 2</span><strong>Current Inventory</strong><em>Stock, freshness, and risk</em></div>
+        <div class="mock-tab"><span>Section 3</span><strong>Actions</strong><em>Spend cash for tomorrow</em></div>
+      </div>
+      <div class="section-panel">
+        <div class="hero-row">
+          <div class="hero-copy">
+            <span class="eyebrow">Day 04 complete</span>
+            <h2>Rain tomorrow, school crowd today, milk and bread hurt trust</h2>
+            <p>The player should first understand the story: customers arrived, essentials were missed, cash is still usable, and tomorrow's rain changes walk-in behavior.</p>
+          </div>
+          <div class="status-tile">
+            <span class="small-label">Store health</span>
+            <strong>Needs repair</strong>
+            <em>Service misses are now visible, but cash is not yet in crisis.</em>
+          </div>
+          <div class="status-tile score-tile">
+            <span class="small-label">Score today</span>
+            <strong>-21</strong>
+            <em>Inventory penalty dominated.</em>
+          </div>
+        </div>
+
+        <div class="metric-grid">
+          <article class="metric money">
+            <span>Money</span>
+            <strong>Rs 2,420</strong>
+            <p>Cash now, after Rs 1,080 revenue and Rs 120 khata added.</p>
+          </article>
+          <article class="metric items">
+            <span>Items</span>
+            <strong>18</strong>
+            <p>Missed units. This is the first thing to fix before spending on campaigns.</p>
+          </article>
+          <article class="metric customers">
+            <span>Customers</span>
+            <strong>3</strong>
+            <p>Customers need attention. Khata reminders can recover cash without hurting trust.</p>
+          </article>
+        </div>
+
+        <div class="weather-strip">
+          <div class="weather-card"><span>Today</span><strong>Mon</strong><em>Clear 31 C</em></div>
+          <div class="weather-card hot"><span>Tomorrow</span><strong>Tue</strong><em>Hot 34 C</em></div>
+          <div class="weather-card"><span>Jun 3</span><strong>Wed</strong><em>Clear 32 C</em></div>
+          <div class="weather-card rain"><span>School</span><strong>Thu</strong><em>Rain 28 C</em></div>
+          <div class="weather-card hot"><span>School</span><strong>Fri</strong><em>Hot 34 C</em></div>
+          <div class="weather-card very-hot"><span>Weekend</span><strong>Sat</strong><em>Heat 39 C</em></div>
+          <div class="weather-card hot"><span>Weekend</span><strong>Sun</strong><em>Hot 34 C</em></div>
+        </div>
+
+        <div class="ledger">
+          <div class="ledger-row bad">
+            <strong>Mrs. Sharma</strong>
+            <span>Asked for milk 2 L and bread 1 pk. Milk was missed. Paid quickly for bread.</span>
+            <strong>Trust -4</strong>
+          </div>
+          <div class="ledger-row warn">
+            <strong>Students group</strong>
+            <span>Asked for Maggi, chips, and cold drinks. Cold drinks were partial.</span>
+            <strong>Partial</strong>
+          </div>
+          <div class="ledger-row muted">
+            <strong>Office regular</strong>
+            <span>Got eggs and biscuits. Payment made on UPI.</span>
+            <strong>Fulfilled</strong>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="mock-frame" aria-label="Inventory mockup">
+      <div class="mock-tabs">
+        <div class="mock-tab"><span>Section 1</span><strong>Insights</strong><em>Context and customer cases</em></div>
+        <div class="mock-tab active"><span>Section 2</span><strong>Current Inventory</strong><em>What is physically in the shop</em></div>
+        <div class="mock-tab"><span>Section 3</span><strong>Actions</strong><em>Restock and market</em></div>
+      </div>
+      <div class="section-panel">
+        <div class="hero-row">
+          <div class="hero-copy">
+            <span class="eyebrow">Shelf health board</span>
+            <h2>Closing stock is the source of truth</h2>
+            <p>Inventory should feel like the player's shelf. Large closing counts, clear red risk, and small movement facts explain why tomorrow's order matters.</p>
+          </div>
+          <div class="status-tile">
+            <span class="small-label">Shelf coverage</span>
+            <strong>14 / 20 SKUs</strong>
+            <em>Six empty categories.</em>
+          </div>
+          <div class="status-tile">
+            <span class="small-label">Freshness risk</span>
+            <strong>Rs 86</strong>
+            <em>Milk and bananas aging.</em>
+          </div>
+        </div>
+
+        <div class="diagnostic-row">
+          <div class="mini-card good"><span class="small-label">Stocked SKUs</span><strong>14</strong></div>
+          <div class="mini-card bad"><span class="small-label">Empty SKUs</span><strong>6</strong></div>
+          <div class="mini-card bad"><span class="small-label">Missed demand</span><strong>18</strong></div>
+          <div class="mini-card warn"><span class="small-label">Perishable watch</span><strong>3</strong></div>
+        </div>
+
+        <div class="inventory-grid">
+          <article class="item-card bad">
+            <div class="item-head"><strong>Milk</strong><span class="pill">Missed demand</span></div>
+            <div class="stock-number">0 L</div>
+            <div class="fact-row">
+              <div><span class="small-label">Sold</span><strong>8 L</strong></div>
+              <div><span class="small-label">Missed</span><strong>6 L</strong></div>
+              <div><span class="small-label">Waste</span><strong>0 L</strong></div>
+            </div>
+            <div class="fresh-track"><span style="width: 18%"></span></div>
+          </article>
+          <article class="item-card warn">
+            <div class="item-head"><strong>Bananas</strong><span class="pill">Freshness risk</span></div>
+            <div class="stock-number">4 kg</div>
+            <div class="fact-row">
+              <div><span class="small-label">Sold</span><strong>3 kg</strong></div>
+              <div><span class="small-label">Missed</span><strong>0 kg</strong></div>
+              <div><span class="small-label">Risk</span><strong>2 kg</strong></div>
+            </div>
+            <div class="fresh-track"><span style="width: 45%"></span></div>
+          </article>
+          <article class="item-card good">
+            <div class="item-head"><strong>Maggi</strong><span class="pill">Healthy</span></div>
+            <div class="stock-number">14 pk</div>
+            <div class="fact-row">
+              <div><span class="small-label">Sold</span><strong>5 pk</strong></div>
+              <div><span class="small-label">Missed</span><strong>0 pk</strong></div>
+              <div><span class="small-label">Waste</span><strong>0</strong></div>
+            </div>
+            <div class="fresh-track"><span style="width: 100%"></span></div>
+          </article>
+          <article class="item-card bad">
+            <div class="item-head"><strong>Cold Drinks</strong><span class="pill">Low stock</span></div>
+            <div class="stock-number">2 bt</div>
+            <div class="fact-row">
+              <div><span class="small-label">Sold</span><strong>10 bt</strong></div>
+              <div><span class="small-label">Missed</span><strong>5 bt</strong></div>
+              <div><span class="small-label">Waste</span><strong>0</strong></div>
+            </div>
+            <div class="fresh-track"><span style="width: 72%"></span></div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="mock-frame" aria-label="Actions mockup">
+      <div class="mock-tabs">
+        <div class="mock-tab"><span>Section 1</span><strong>Insights</strong><em>Read the case</em></div>
+        <div class="mock-tab"><span>Section 2</span><strong>Current Inventory</strong><em>Inspect the shelf</em></div>
+        <div class="mock-tab active"><span>Section 3</span><strong>Actions</strong><em>Commit tomorrow's plan</em></div>
+      </div>
+      <div class="section-panel">
+        <div class="action-layout">
+          <div class="action-main">
+            <div class="hero-copy">
+              <span class="eyebrow">Decision desk</span>
+              <h2>Use cash where tomorrow can reward you</h2>
+              <p>Actions are grouped by intent: stock repair, demand creation, and relationship recovery. The summary rail stays visible so cost and score impact are always clear.</p>
+            </div>
+
+            <section class="action-lane">
+              <div class="lane-head">
+                <div><span class="small-label">Stock actions</span><h3>Restock what hurt service first</h3></div>
+                <span class="pill">Closing stock + missed demand</span>
+              </div>
+              <div class="stock-plan-grid">
+                <div class="plan-row bad">
+                  <strong>Milk</strong>
+                  <p>Closing 0 L, missed 6 L. High trust impact.</p>
+                  <div class="stepper"><button>-</button><span>12</span><button>+</button></div>
+                </div>
+                <div class="plan-row bad">
+                  <strong>Cold Drinks</strong>
+                  <p>Hot tomorrow, closing 2 bt, missed 5 bt.</p>
+                  <div class="stepper"><button>-</button><span>10</span><button>+</button></div>
+                </div>
+                <div class="plan-row warn">
+                  <strong>Bananas</strong>
+                  <p>Rain and heat ahead. Do not overbuy perishables.</p>
+                  <div class="stepper"><button>-</button><span>2</span><button>+</button></div>
+                </div>
+              </div>
+            </section>
+
+            <section class="action-lane">
+              <div class="lane-head">
+                <div><span class="small-label">Marketing</span><h3>Only create demand you can serve</h3></div>
+                <span class="pill">Cost, delay, segment</span>
+              </div>
+              <div class="campaign-grid">
+                <div class="campaign-card selected">
+                  <strong>WhatsApp Status</strong>
+                  <p>Rs 35, regulars and families, effect tomorrow. Works if essentials are stocked.</p>
+                </div>
+                <div class="campaign-card">
+                  <strong>School Combo</strong>
+                  <p>Rs 80, students, next school day. Needs Maggi, chips, cold drinks.</p>
+                </div>
+                <div class="campaign-card">
+                  <strong>Chalkboard Offer</strong>
+                  <p>Rs 20, walk-ins, same day. Best for snacks and aging items.</p>
+                </div>
+              </div>
+            </section>
+
+            <section class="action-lane">
+              <div class="lane-head">
+                <div><span class="small-label">Relationships</span><h3>Recover cash without breaking trust</h3></div>
+                <span class="pill">Khata reminders</span>
+              </div>
+              <div class="stock-plan-grid">
+                <div class="plan-row"><strong>Mrs. Sharma</strong><p>Rs 120 pending. Regular, polite reminder expected.</p></div>
+                <div class="plan-row"><strong>Office regular</strong><p>Rs 60 pending. Low risk, likely pays tomorrow.</p></div>
+                <div class="plan-row"><strong>Student group</strong><p>No khata. Use offers only if stock is ready.</p></div>
+              </div>
+            </section>
+          </div>
+
+          <aside class="action-rail">
+            <div class="rail-hero">
+              <span class="small-label">Cash after plan</span>
+              <strong>Rs 1,126</strong>
+              <p>Reserve remains above target. Plan is playable.</p>
+            </div>
+            <div class="rail-grid">
+              <div><span>Order cost</span><strong>Rs 1,180</strong></div>
+              <div><span>Marketing</span><strong>Rs 35</strong></div>
+              <div><span>Khata notices</span><strong>2</strong></div>
+              <div><span>Expected focus</span><strong>Service + cash</strong></div>
+            </div>
+            <button class="primary-action">Open next day</button>
+          </aside>
+        </div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

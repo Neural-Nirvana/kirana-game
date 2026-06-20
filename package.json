@@ -1,0 +1,22 @@
+{
+  "name": "kirana-game",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "web:dev": "vite --host 127.0.0.1 --port 5175 --strictPort",
+    "server:dev": "tsx server/index.ts",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "typescript": "~6.0.2",
+    "vite": "^8.0.12"
+  },
+  "dependencies": {
+    "@types/node": "^26.0.0",
+    "fastify": "^5.8.5",
+    "tsx": "^4.22.4"
+  }
+}

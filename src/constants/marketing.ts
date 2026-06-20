@@ -1,0 +1,103 @@
+import type { MarketingCampaignSpec } from '../types';
+
+export const MARKETING_CAMPAIGNS: MarketingCampaignSpec[] = [
+  {
+    id: 'chalkboard_offer',
+    name: 'Chalkboard Offer',
+    channel: 'in_store',
+    targetSegments: ['walkin', 'snack'],
+    targetProducts: ['chips', 'cold_drinks', 'maggi'],
+    cost: 30,
+    delayDays: 0,
+    durationDays: 1,
+    unlockDay: 1,
+    expectedReturn: '+2-4 walk-in snack baskets today',
+    riskNotes: ['Stock chips and cold drinks before the offer'],
+  },
+  {
+    id: 'whatsapp_status',
+    name: 'WhatsApp Status',
+    channel: 'online',
+    targetSegments: ['regular', 'family'],
+    targetProducts: ['milk', 'bread', 'eggs'],
+    cost: 50,
+    delayDays: 1,
+    durationDays: 2,
+    unlockDay: 1,
+    expectedReturn: '+1-3 repeat household visits tomorrow',
+    riskNotes: ['Missed essentials hurt trust after a reminder'],
+  },
+  {
+    id: 'school_combo',
+    name: 'School Combo',
+    channel: 'offline',
+    targetSegments: ['student', 'snack'],
+    targetProducts: ['maggi', 'chips', 'cold_drinks'],
+    cost: 80,
+    delayDays: 1,
+    durationDays: 2,
+    unlockDay: 1,
+    expectedReturn: '+15% student snack demand next school day',
+    riskNotes: ['Cold drinks and Maggi can stock out quickly'],
+  },
+  {
+    id: 'apartment_pamphlets',
+    name: 'Apartment Pamphlets',
+    channel: 'offline',
+    targetSegments: ['family', 'regular'],
+    targetProducts: ['milk', 'bread', 'eggs', 'bananas'],
+    cost: 250,
+    delayDays: 2,
+    durationDays: 3,
+    unlockDay: 8,
+    expectedReturn: '+3-6 household visits over three days',
+    riskNotes: ['Requires cash buffer and essentials stock'],
+  },
+  {
+    id: 'festival_bundle',
+    name: 'Festival Bundle Display',
+    channel: 'in_store',
+    targetSegments: ['family', 'walkin'],
+    targetProducts: ['chips', 'cold_drinks', 'bread', 'bananas'],
+    cost: 180,
+    delayDays: 0,
+    durationDays: 2,
+    unlockDay: 12,
+    expectedReturn: '+10% basket size during event pressure',
+    riskNotes: ['Can create snack stockouts if understocked'],
+  },
+  {
+    id: 'loyalty_card',
+    name: 'Loyalty Card',
+    channel: 'relationship',
+    targetSegments: ['regular', 'family', 'office'],
+    targetProducts: ['milk', 'bread', 'eggs', 'cold_drinks'],
+    cost: 120,
+    delayDays: 2,
+    durationDays: 5,
+    unlockDay: 15,
+    expectedReturn: '+trust recovery and repeat visits',
+    riskNotes: ['Low inventory after loyalty push damages trust'],
+  },
+  {
+    id: 'recovery_call',
+    name: 'Recovery Call',
+    channel: 'relationship',
+    targetSegments: ['regular', 'office', 'bulk'],
+    targetProducts: ['milk', 'bread', 'cold_drinks'],
+    cost: 40,
+    delayDays: 1,
+    durationDays: 2,
+    unlockDay: 18,
+    expectedReturn: 'Recover one at-risk repeat customer',
+    riskNotes: ['Only useful if yesterday had missed demand'],
+  },
+];
+
+export function getUnlockedMarketingCampaigns(day: number): MarketingCampaignSpec[] {
+  return MARKETING_CAMPAIGNS.filter((campaign) => campaign.unlockDay <= day);
+}
+
+export function getMarketingCampaign(specId: string): MarketingCampaignSpec | undefined {
+  return MARKETING_CAMPAIGNS.find((campaign) => campaign.id === specId);
+}
