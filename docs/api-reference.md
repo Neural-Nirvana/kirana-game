@@ -163,7 +163,7 @@ Request:
     },
     "khataReminders": [],
     "marketingActions": [
-      { "specId": "whatsapp_status" }
+      { "specId": "whatsapp_status", "targetProducts": ["milk", "bread"] }
     ],
     "cashReserve": 600,
     "fridgeAllocation": {
@@ -316,4 +316,3 @@ Status: `404`
 ```
 
 Status: `400`
-

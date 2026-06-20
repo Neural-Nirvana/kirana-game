@@ -80,14 +80,14 @@ It shows:
 - waste
 - order quantity
 - discard quantity
-- offer/discount choice
+- shelf offer/discount choice for existing inventory
 - wholesaler cart save state
 
-Use the popup to decide if the item needs restocking, removal, or an offer.
+Use the popup to decide if the item needs restocking, removal, or a shelf offer.
 
 ### 4. Marketing Selector
 
-Marketing appears below the inventory row. Campaigns cost money and create demand pressure for specific customer segments and product groups.
+Marketing appears below the inventory row. Campaigns cost money and create demand pressure for specific customer segments. Each campaign has eligible product groups, and you choose which products from that campaign to promote.
 
 Marketing is not free score. A campaign scores well only when promoted demand is actually served profitably.
 
@@ -97,7 +97,7 @@ The bottom decision bar summarizes the current plan:
 
 - order cost
 - cash after plan
-- selected marketing
+- selected marketing and promoted products
 - offers/removals/khata reminders
 
 The Open Next Day button is separate from item ordering. Save item edits into the wholesaler cart first, then open the next day when the whole plan is ready.
@@ -165,4 +165,3 @@ Good players do not just chase maximum stock. They ask:
 ## Winning Mindset
 
 The game rewards disciplined correction. You do not need to predict perfectly. You need to learn from yesterday, protect cash, serve important demand, and avoid creating avoidable problems.
-

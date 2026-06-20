@@ -91,6 +91,7 @@ export interface PlayerActions {
 
 export interface MarketingActionSelection {
   specId: string;
+  targetProducts?: ProductId[];
 }
 
 export interface MarketingCampaignSpec {
@@ -111,6 +112,7 @@ export interface MarketingCampaignInstance {
   id: string;
   runId: string;
   specId: string;
+  targetProducts?: ProductId[];
   plannedDay: number;
   effectStartDay: number;
   effectEndDay: number;

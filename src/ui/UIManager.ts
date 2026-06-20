@@ -59,6 +59,7 @@ export class UIManager {
   private discountMap: Partial<Record<ProductId, number>> = {};
   private khataReminderIds: Set<string> = new Set();
   private selectedMarketingIds: Set<string> = new Set();
+  private marketingProductSelections: Partial<Record<string, Set<ProductId>>> = {};
   private activeMarketing: MarketingCampaignInstance[] = [];
   private itemModalDraft?: ItemModalDraft;
   private itemTrendKeydown?: (event: KeyboardEvent) => void;
@@ -467,6 +468,7 @@ export class UIManager {
       this.discountMap = {};
       this.khataReminderIds = new Set();
       this.selectedMarketingIds = new Set();
+      this.marketingProductSelections = {};
       this.cashReserve = state.config.defaultCashReserve;
       this.openingDayContext = dayContext;
       this.openingAIInsightStatus = aiInsightStatus;
@@ -508,6 +510,7 @@ export class UIManager {
       this.discountMap = {};
       this.khataReminderIds = new Set();
       this.selectedMarketingIds = new Set();
+      this.marketingProductSelections = {};
     }
     this._renderCaseUI(result, state, dayContext, aiInsightStatus);
     this.restoreOpenItemTrendModal(itemModalSnapshot, state);
@@ -2214,6 +2217,9 @@ export class UIManager {
       .map((campaign) => {
         const spec = getMarketingCampaign(campaign.specId);
         if (!spec) return '';
+        const promotedProducts = this.getCampaignTargetProductsForInstance(campaign, spec)
+          .map((productId) => PRODUCTS.find((product) => product.id === productId)?.name ?? productId)
+          .join(', ');
         const resultLine = campaign.actualResult
           ? `
             <div class="marketing-result-line ${this.getMarketingScoreTone(campaign.actualResult.score ?? 0)}">
@@ -2226,6 +2232,7 @@ export class UIManager {
             <span>${spec.name}</span>
             <strong>${this.titleCase(campaign.status)}</strong>
             <em>Effect Day ${campaign.effectStartDay}-${campaign.effectEndDay}</em>
+            <small>Promoting ${promotedProducts}</small>
             ${resultLine}
           </div>
         `;
@@ -2252,7 +2259,8 @@ export class UIManager {
   private renderMarketingCampaignCard(campaign: MarketingCampaignSpec, state: GameState, planningDay: number): string {
     const selected = this.selectedMarketingIds.has(campaign.id);
     const locked = campaign.unlockDay > planningDay;
-    const targetProducts = campaign.targetProducts
+    const selectedProducts = this.getSelectedMarketingProducts(campaign);
+    const targetProducts = selectedProducts
       .map((productId) => PRODUCTS.find((product) => product.id === productId)?.name ?? productId)
       .slice(0, 4)
       .join(', ');
@@ -2276,7 +2284,31 @@ export class UIManager {
         <p>${campaign.expectedReturn}</p>
         <div class="marketing-targets">
           <span>Customers: ${targetSegments}</span>
-          <span>Stock: ${targetProducts}</span>
+          <span>Promoting: ${targetProducts}</span>
+        </div>
+        <div class="marketing-product-picker" aria-label="${campaign.name} promoted items">
+          ${campaign.targetProducts.map((productId) => {
+            const product = PRODUCTS.find((item) => item.id === productId);
+            const isPicked = selectedProducts.includes(productId);
+            const projectedStock = Math.max(
+              0,
+              (state.getProductInventory(productId)?.totalStock ?? 0) +
+                (this.orderBasket[productId] ?? 0) -
+                (this.removalMap[productId] ?? 0)
+            );
+            return `
+              <button
+                type="button"
+                class="${isPicked ? 'active' : ''}"
+                data-marketing-product="${campaign.id}"
+                data-product="${productId}"
+                ${locked ? 'disabled' : ''}
+              >
+                <span>${product?.name ?? productId}</span>
+                <em>${projectedStock} ${this.shortUnit(product?.unit ?? '')}</em>
+              </button>
+            `;
+          }).join('')}
         </div>
         ${warning ? `<div class="marketing-warning">${warning}</div>` : ''}
         <button
@@ -2712,6 +2744,7 @@ export class UIManager {
     document.getElementById('btn-clear-initial')?.addEventListener('click', () => {
       this.orderBasket = {};
       this.selectedMarketingIds = new Set();
+      this.marketingProductSelections = {};
       this.emitPlanChange();
       this.refreshInitialStockingUI(state);
     });
@@ -3230,8 +3263,9 @@ export class UIManager {
 
         <div class="item-action-offers">
           <div>
-            <span>Offer</span>
+            <span>Shelf offer</span>
             <strong>${discount === 0 ? 'No discount' : `${discount}% off selling price`}</strong>
+            <em>${discount === 0 ? 'No shelf discount saved' : 'Applies to stock already on the shelf next day'}</em>
           </div>
           <div class="item-action-offer-chips">
             ${[0, 10, 15, 20].map((pct) => `
@@ -3508,6 +3542,18 @@ export class UIManager {
         onChange();
       });
     });
+    document.querySelectorAll<HTMLElement>('[data-marketing-product]').forEach((btn) => {
+      if (btn.dataset.bound === 'true') return;
+      btn.dataset.bound = 'true';
+      btn.addEventListener('click', (event) => {
+        event.stopPropagation();
+        const specId = (event.currentTarget as HTMLElement).dataset.marketingProduct;
+        const productId = (event.currentTarget as HTMLElement).dataset.product as ProductId | undefined;
+        if (!specId || !productId) return;
+        this.toggleMarketingProduct(specId, productId);
+        onChange();
+      });
+    });
   }
 
   private refreshCasePlanningUI(result: DayResult, state: GameState) {
@@ -3521,7 +3567,18 @@ export class UIManager {
       this.selectedMarketingIds.delete(specId);
     } else {
       this.selectedMarketingIds.add(specId);
+      this.ensureMarketingProductSelection(specId);
     }
+  }
+
+  private toggleMarketingProduct(specId: string, productId: ProductId) {
+    const selectedProducts = this.ensureMarketingProductSelection(specId);
+    if (selectedProducts.has(productId) && selectedProducts.size > 1) {
+      selectedProducts.delete(productId);
+    } else {
+      selectedProducts.add(productId);
+    }
+    this.selectedMarketingIds.add(specId);
   }
 
   private attachListeners() {
@@ -3598,7 +3655,10 @@ export class UIManager {
       removals: { ...this.removalMap },
       discounts: { ...this.discountMap },
       khataReminders: Array.from(this.khataReminderIds),
-      marketingActions: Array.from(this.selectedMarketingIds).map((specId) => ({ specId })),
+      marketingActions: Array.from(this.selectedMarketingIds).map((specId) => ({
+        specId,
+        targetProducts: Array.from(this.ensureMarketingProductSelection(specId)),
+      })),
       cashReserve: this.cashReserve,
       fridgeAllocation: { ...this.fridgeAlloc },
     };
@@ -3728,7 +3788,7 @@ export class UIManager {
   }
 
   private getCampaignInventoryWarning(campaign: MarketingCampaignSpec, state: GameState): string {
-    const weakProducts = campaign.targetProducts
+    const weakProducts = this.getSelectedMarketingProducts(campaign)
       .filter((productId) => {
         const product = PRODUCTS.find((item) => item.id === productId);
         if (!product) return false;
@@ -3741,6 +3801,28 @@ export class UIManager {
       .slice(0, 3);
 
     return weakProducts.length > 0 ? `Low support stock: ${weakProducts.join(', ')}` : '';
+  }
+
+  private ensureMarketingProductSelection(specId: string): Set<ProductId> {
+    const campaign = getMarketingCampaign(specId);
+    const existing = this.marketingProductSelections[specId];
+    if (existing && existing.size > 0) return existing;
+    const created = new Set<ProductId>(campaign?.targetProducts ?? []);
+    this.marketingProductSelections[specId] = created;
+    return created;
+  }
+
+  private getSelectedMarketingProducts(campaign: MarketingCampaignSpec): ProductId[] {
+    return Array.from(this.ensureMarketingProductSelection(campaign.id))
+      .filter((productId) => campaign.targetProducts.includes(productId));
+  }
+
+  private getCampaignTargetProductsForInstance(
+    campaign: MarketingCampaignInstance,
+    spec: MarketingCampaignSpec
+  ): ProductId[] {
+    const selected = campaign.targetProducts?.filter((productId) => spec.targetProducts.includes(productId));
+    return selected && selected.length > 0 ? selected : spec.targetProducts;
   }
 
   private getTotalItemsSold(result: DayResult): number {

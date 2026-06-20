@@ -107,6 +107,7 @@ function migrate(db: DatabaseSync) {
       id TEXT PRIMARY KEY,
       run_id TEXT NOT NULL REFERENCES game_runs(id) ON DELETE CASCADE,
       spec_id TEXT NOT NULL,
+      target_products_json TEXT,
       planned_day INTEGER NOT NULL,
       effect_start_day INTEGER NOT NULL,
       effect_end_day INTEGER NOT NULL,
@@ -160,6 +161,7 @@ function migrate(db: DatabaseSync) {
   ensureColumn(db, 'game_runs', 'player_id', 'TEXT REFERENCES players(id) ON DELETE SET NULL');
   ensureColumn(db, 'game_runs', 'run_name', 'TEXT');
   ensureColumn(db, 'game_runs', 'version', 'INTEGER NOT NULL DEFAULT 0');
+  ensureColumn(db, 'marketing_campaigns', 'target_products_json', 'TEXT');
   db.exec(`
     CREATE UNIQUE INDEX IF NOT EXISTS idx_players_kind_name_key ON players(kind, name_key) WHERE name_key IS NOT NULL;
     CREATE INDEX IF NOT EXISTS idx_game_runs_player_id ON game_runs(player_id, updated_at);

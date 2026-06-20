@@ -45,6 +45,7 @@ interface CampaignRow {
   id: string;
   run_id: string;
   spec_id: string;
+  target_products_json: string | null;
   planned_day: number;
   effect_start_day: number;
   effect_end_day: number;
@@ -425,12 +426,13 @@ export class RunStore {
   private insertCampaign(campaign: MarketingCampaignInstance) {
     this.db.prepare(`
       INSERT INTO marketing_campaigns
-      (id, run_id, spec_id, planned_day, effect_start_day, effect_end_day, status, cost, actual_result_json)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (id, run_id, spec_id, target_products_json, planned_day, effect_start_day, effect_end_day, status, cost, actual_result_json)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       campaign.id,
       campaign.runId,
       campaign.specId,
+      campaign.targetProducts ? json(campaign.targetProducts) : null,
       campaign.plannedDay,
       campaign.effectStartDay,
       campaign.effectEndDay,
@@ -456,6 +458,7 @@ export class RunStore {
       id: row.id,
       runId: row.run_id,
       specId: row.spec_id,
+      targetProducts: row.target_products_json ? parseJson(row.target_products_json) : undefined,
       plannedDay: row.planned_day,
       effectStartDay: row.effect_start_day,
       effectEndDay: row.effect_end_day,

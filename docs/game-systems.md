@@ -173,6 +173,7 @@ Marketing effects:
 
 - can increase visit pressure
 - can increase target product demand
+- use player-selected promoted SKUs when a campaign supports multiple eligible products
 - costs cash immediately
 - can generate positive score if demand is served
 - can generate negative score if promoted items stock out
@@ -225,4 +226,3 @@ It does not:
 - award score
 
 If `OPENROUTER_API_KEY` is not configured or the request fails, the game continues using deterministic environment signals.
-

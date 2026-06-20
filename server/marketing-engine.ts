@@ -5,6 +5,7 @@ import type {
   MarketingCampaignSpec,
   MarketingEffect,
   PlayerActions,
+  ProductId,
 } from '../src/types';
 import { randomUUID } from 'node:crypto';
 import { getMarketingCampaign, getUnlockedMarketingCampaigns } from '../src/constants/marketing';
@@ -29,16 +30,20 @@ export function createCampaignInstances(params: {
   selections: MarketingActionSelection[];
 }): MarketingCampaignInstance[] {
   return params.selections
-    .map((selection) => getMarketingCampaign(selection.specId))
-    .filter((spec): spec is MarketingCampaignSpec => Boolean(spec))
-    .filter((spec) => spec.unlockDay <= params.day)
-    .map((spec) => {
+    .map((selection) => ({
+      selection,
+      spec: getMarketingCampaign(selection.specId),
+    }))
+    .filter((entry): entry is { selection: MarketingActionSelection; spec: MarketingCampaignSpec } => Boolean(entry.spec))
+    .filter(({ spec }) => spec.unlockDay <= params.day)
+    .map(({ selection, spec }) => {
       const effectStartDay = params.day + spec.delayDays;
       const effectEndDay = effectStartDay + spec.durationDays - 1;
       return {
         id: randomUUID(),
         runId: params.runId,
         specId: spec.id,
+        targetProducts: resolveCampaignTargetProducts(spec, selection),
         plannedDay: params.day,
         effectStartDay,
         effectEndDay,
@@ -83,11 +88,12 @@ export function buildMarketingEffects(
       const spec = getMarketingCampaign(campaign.specId);
       if (!spec) return undefined;
       const baseLift = spec.channel === 'relationship' ? 1.08 : spec.cost >= 150 ? 1.18 : 1.12;
+      const targetProducts = campaign.targetProducts?.length ? campaign.targetProducts : spec.targetProducts;
       return {
         campaignId: campaign.id,
         specId: spec.id,
         segments: spec.targetSegments,
-        products: spec.targetProducts,
+        products: targetProducts,
         demandMultiplier: baseLift,
         visitMultiplier: spec.channel === 'offline' ? 1.08 : 1.03,
         campaignCost: campaign.cost,
@@ -112,6 +118,20 @@ export function validateMarketingSelections(day: number, selections: MarketingAc
     if (seen.has(spec.id)) {
       errors.push(`${spec.name} selected more than once`);
     }
+    const targetProducts = selection.targetProducts;
+    if (targetProducts !== undefined) {
+      const selectedProducts = Array.from(new Set(targetProducts));
+      if (selectedProducts.length === 0) {
+        errors.push(`${spec.name} needs at least one promoted item`);
+      }
+      const validProductIds = new Set(PRODUCTS.map((product) => product.id));
+      const invalidProducts = selectedProducts.filter((productId) => {
+        return !validProductIds.has(productId) || !spec.targetProducts.includes(productId);
+      });
+      if (invalidProducts.length > 0) {
+        errors.push(`${spec.name} cannot promote ${invalidProducts.join(', ')}`);
+      }
+    }
     seen.add(spec.id);
   }
   return errors;
@@ -123,6 +143,7 @@ export function summarizeMarketingResult(
 ): MarketingCampaignInstance['actualResult'] {
   const spec = getMarketingCampaign(campaign.specId);
   if (!spec) return undefined;
+  const targetProducts = campaign.targetProducts?.length ? campaign.targetProducts : spec.targetProducts;
   const relevantVisits = result.customerVisits.filter((visit) => spec.targetSegments.includes(visit.segment));
   const relevantRevenue = relevantVisits.reduce((sum, visit) => sum + visit.revenue, 0);
   let servedTargetUnits = 0;
@@ -131,20 +152,20 @@ export function summarizeMarketingResult(
 
   for (const visit of relevantVisits) {
     for (const line of visit.fulfilled) {
-      if (!spec.targetProducts.includes(line.productId)) continue;
+      if (!targetProducts.includes(line.productId)) continue;
       const product = PRODUCTS.find((item) => item.id === line.productId);
       servedTargetUnits += line.quantity;
       targetGrossMargin += line.quantity * (product?.margin ?? 0);
     }
     for (const line of visit.missed) {
-      if (spec.targetProducts.includes(line.productId)) {
+      if (targetProducts.includes(line.productId)) {
         missedUnits += line.quantity;
       }
     }
   }
 
   const promotedStockoutSkus = result.inventoryMovements
-    .filter((row) => spec.targetProducts.includes(row.productId) && row.missedDemand > 0)
+    .filter((row) => targetProducts.includes(row.productId) && row.missedDemand > 0)
     .map((row) => row.productId);
   const allocatedDailyCost = campaign.cost / Math.max(1, spec.durationDays);
   const roi = allocatedDailyCost > 0 ? targetGrossMargin / allocatedDailyCost : 0;
@@ -161,7 +182,7 @@ export function summarizeMarketingResult(
     score: 0,
   });
   const fallbackMissedUnits = result.inventoryMovements
-    .filter((row) => spec.targetProducts.includes(row.productId))
+    .filter((row) => targetProducts.includes(row.productId))
     .reduce((sum, row) => sum + row.missedDemand, 0);
 
   return {
@@ -174,4 +195,18 @@ export function summarizeMarketingResult(
     score,
     promotedStockoutSkus,
   };
+}
+
+function resolveCampaignTargetProducts(
+  spec: MarketingCampaignSpec,
+  selection?: MarketingActionSelection
+): ProductId[] {
+  const selected = uniqueProductIds(selection?.targetProducts ?? []);
+  const allowed = selected.filter((productId) => spec.targetProducts.includes(productId));
+  return allowed.length > 0 ? allowed : spec.targetProducts;
+}
+
+function uniqueProductIds(productIds: ProductId[]): ProductId[] {
+  const validProductIds = new Set(PRODUCTS.map((product) => product.id));
+  return Array.from(new Set(productIds)).filter((productId) => validProductIds.has(productId));
 }
