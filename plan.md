@@ -1,3 +1,7 @@
+> Historical implementation note.
+>
+> This file captures an early implementation plan. For the current source of truth, start with `README.md` and `docs/README.md`.
+
 I've read through the full 1704-line game spec. It's a beautifully designed document — the core concept is **"Kirana Survival"**, a 30-day Indian kirana shop simulator where the emotional hero is milk, and the drama comes from real tradeoffs (fridge space vs. trust, cash buffer vs. festival prep, discount early vs. hold price).
 
 Now let me design a proper implementation plan focused on **aesthetics and architecture**.

@@ -1,5 +1,9 @@
 # Kirana Backend, Database, Marketing, and AI Players Plan
 
+> Historical planning note.
+>
+> Much of this plan has been implemented and evolved. For current behavior, use [Architecture](architecture.md), [API Reference](api-reference.md), [Game Systems](game-systems.md), and [Deployment](deployment.md).
+
 ## Summary
 
 Build a DB-backed simulation architecture where the backend owns all 30-day runs for both human and AI players. Use Node + SQLite locally, expose OpenEnv-style `reset` / `step` / `state` endpoints, add marketing as a strategic action system, and store compact AI decision memory in our DB rather than relying on OpenRouter session memory.

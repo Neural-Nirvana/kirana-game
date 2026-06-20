@@ -1,5 +1,9 @@
 # AI Nagar: Kirana Street - Case Simulator Architecture
 
+> Historical architecture note.
+>
+> This remains useful for design intent. For current implementation details, use [Architecture](architecture.md), [Game Systems](game-systems.md), and [API Reference](api-reference.md).
+
 ## Core Game Loop
 
 The game is a daily kirana case simulator.

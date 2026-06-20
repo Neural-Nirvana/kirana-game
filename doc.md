@@ -1,3 +1,7 @@
+> Historical design note.
+>
+> This file captures the early game vision and may contain older naming, balances, and UI layout ideas. For current setup, gameplay, architecture, API, and deployment details, start with `README.md` and `docs/README.md`.
+
 Absolutely. Episode 1 should be designed as a **human-playable kirana strategy game first**, and only later should AI agents enter the arena.
 
 That matters because viewers should think:
