@@ -1,4 +1,4 @@
-import type { ProductId, PlayerActions, DayResult, VisibleState, CustomerOrderLine, CustomerProfile, CustomerVisit, PerishabilitySnapshot, ProductInventory, LLMDayContext, MarketingCampaignInstance, MarketingCampaignSpec, PlayerProfile } from '../types';
+import type { ProductId, PlayerActions, DayResult, VisibleState, CustomerOrderLine, CustomerProfile, CustomerVisit, PerishabilitySnapshot, ProductInventory, LLMDayContext, MarketingCampaignInstance, MarketingCampaignSpec, PlayerProfile, DayLog } from '../types';
 import { GameState } from '../game/GameState';
 import { PRODUCTS, DEFAULT_CONFIG } from '../constants/products';
 import { MARKETING_CAMPAIGNS, getMarketingCampaign } from '../constants/marketing';
@@ -36,6 +36,18 @@ type ItemModalDraft = {
 type ItemModalSnapshot = {
   productId: ProductId;
   scrollTop: number;
+};
+
+type FinancialSummary = {
+  revenue: number;
+  costOfGoods: number;
+  grossMargin: number;
+  purchaseSpend: number;
+  marketingSpend: number;
+  wasteLoss: number;
+  removalLoss: number;
+  operatingProfit: number;
+  cashChange: number;
 };
 
 const PRODUCT_IMAGE_BY_ID: Partial<Record<ProductId, string>> = {
@@ -585,6 +597,7 @@ export class UIManager {
     const rb = result.rewardBreakdown;
     const total = rb.total;
     const positive = total >= 0;
+    const financials = this.getFinancialSummary(result, state);
 
     this.container.innerHTML = `
       <div class="screen active" id="evening-screen">
@@ -598,7 +611,10 @@ export class UIManager {
           </div>
 
           <div class="report-breakdown">
-            ${this.renderReportRow('Profit', `₹${result.profit.toLocaleString()}`, result.profit >= 0 ? 'positive' : 'negative')}
+            ${this.renderReportRow('Operating Profit', this.formatSignedCurrency(financials.operatingProfit), financials.operatingProfit >= 0 ? 'positive' : 'negative')}
+            ${this.renderReportRow('Gross Margin', `₹${financials.grossMargin.toLocaleString()}`, financials.grossMargin >= 0 ? 'positive' : 'negative')}
+            ${this.renderReportRow('Revenue', `₹${financials.revenue.toLocaleString()}`, financials.revenue > 0 ? 'positive' : 'neutral')}
+            ${this.renderReportRow('Stock Purchased', `₹${financials.purchaseSpend.toLocaleString()}`, financials.purchaseSpend > 0 ? 'neutral' : 'positive')}
             ${this.renderReportRow('Cash Balance', `₹${result.cash.toLocaleString()}`, 'neutral')}
             ${this.renderReportRow('Customer Trust', `${result.trust}%`, result.trust >= 70 ? 'positive' : result.trust >= 50 ? 'neutral' : 'negative')}
             ${this.renderReportRow('Waste Loss', `₹${result.wasteLoss.toLocaleString()}`, result.wasteLoss > 0 ? 'negative' : 'positive')}
@@ -639,7 +655,7 @@ export class UIManager {
   showFinalScoreboard(state: GameState) {
     this.stopLiveScoreboard();
     const totalScore = state.getTotalScore();
-    const totalProfit = state.history.reduce((sum, log) => sum + log.results.profit, 0);
+    const runFinancials = this.getRunFinancialSummary(state);
     const totalWaste = state.history.reduce((sum, log) => sum + log.results.wasteLoss, 0);
     const stockoutDays = state.history.filter(log => log.results.stockouts > 0).length;
     const totalStockoutIncidents = state.history.reduce((sum, log) => sum + log.results.stockouts, 0);
@@ -659,7 +675,11 @@ export class UIManager {
           </div>
 
           <div class="report-breakdown" style="margin-bottom: 20px;">
-            ${this.renderReportRow('Total Profit', `₹${totalProfit.toLocaleString()}`, totalProfit > 0 ? 'positive' : 'negative')}
+            ${this.renderReportRow('Operating Profit', this.formatSignedCurrency(runFinancials.operatingProfit), runFinancials.operatingProfit >= 0 ? 'positive' : 'negative')}
+            ${this.renderReportRow('Total Revenue', `₹${runFinancials.revenue.toLocaleString()}`, runFinancials.revenue > 0 ? 'positive' : 'neutral')}
+            ${this.renderReportRow('Gross Margin', `₹${runFinancials.grossMargin.toLocaleString()}`, runFinancials.grossMargin >= 0 ? 'positive' : 'negative')}
+            ${this.renderReportRow('Stock Purchased', `₹${runFinancials.purchaseSpend.toLocaleString()}`, 'neutral')}
+            ${this.renderReportRow('Marketing Spend', `₹${runFinancials.marketingSpend.toLocaleString()}`, runFinancials.marketingSpend > 0 ? 'neutral' : 'positive')}
             ${this.renderReportRow('Final Customer Trust', `${finalTrust}%`, finalTrust >= 70 ? 'positive' : finalTrust >= 50 ? 'neutral' : 'negative')}
             ${this.renderReportRow('Waste Loss', `₹${totalWaste.toLocaleString()}`, 'negative')}
             ${this.renderReportRow('Stockout Days', `${stockoutDays}`, stockoutDays < 5 ? 'positive' : 'negative')}
@@ -758,15 +778,14 @@ export class UIManager {
     aiInsightStatus: AIInsightStatus = dayContext ? 'ready' : 'unavailable'
   ): string {
     const khataDue = this.getTotalKhataDue(state);
-    const totalRevenue = this.getTotalRevenue(result);
+    const financials = this.getFinancialSummary(result, state);
     const totalSold = this.getTotalItemsSold(result);
     const totalMissed = this.getTotalMissedDemand(result);
     const missedRevenue = this.getMissedRevenue(result);
     const stockoutDays = state.history.filter(log => log.results.stockouts > 0).length;
     const cashCrisisDays = state.history.filter(log => log.results.cash < state.config.cashCrisisThreshold).length;
     const regularsKept = state.customers.filter(customer => customer.trust >= 70).length;
-    const cashDelta = this.getCashDelta(result, state);
-    const losses = result.wasteLoss + result.removalLoss;
+    const losses = financials.wasteLoss + financials.removalLoss;
     const shopStatus = this.getDailyShopStatus(result);
     const rewards = result.unlockedRewards.filter((reward) => reward.unlocked).slice(0, 3);
     const events = this.getTodaysEvents(result.day);
@@ -792,8 +811,8 @@ export class UIManager {
           ? 'positive'
           : 'neutral';
     const inventoryShortageTone = severeInventoryRisk ? 'negative' : 'warning';
-    const moneyMain = `₹${result.cash.toLocaleString()}`;
-    const moneyLabel = 'cash in hand';
+    const moneyMain = this.formatSignedCurrency(financials.operatingProfit);
+    const moneyLabel = 'operating profit';
     const itemMain = `${totalSold}`;
     const itemLabel = 'sold today';
     const customerMain = `${result.customerVisits.length}`;
@@ -827,6 +846,7 @@ export class UIManager {
             ${this.renderDecisionChip('Day', String(result.day).padStart(2, '0'), 'calendar')}
             ${this.renderDecisionChip('Plan', environment.dayName, 'calendar')}
             ${this.renderDecisionChip('Trust', `${Math.round(result.trust)}%`, result.trustChange >= 0 ? 'positive' : 'warning')}
+            ${this.renderDecisionChip('Profit', this.formatSignedCurrency(financials.operatingProfit), financials.operatingProfit >= 0 ? 'positive' : 'negative')}
             ${this.renderDecisionChip('Cash', `₹${result.cash.toLocaleString()}`, 'positive')}
           </div>
         </div>
@@ -844,14 +864,14 @@ export class UIManager {
             'Money',
             moneyMain,
             moneyLabel,
-            totalRevenue > 0 ? 'positive' : cashDelta < 0 ? 'negative' : 'neutral',
+            financials.operatingProfit >= 0 ? 'positive' : 'negative',
             [
-              { label: 'Cash now', value: `₹${result.cash.toLocaleString()}`, tone: cashDelta >= 0 ? 'positive' : 'negative' },
-              { label: 'Cash change', value: this.formatSignedCurrency(cashDelta), tone: cashDelta >= 0 ? 'positive' : 'negative' },
+              { label: 'Revenue', value: `₹${financials.revenue.toLocaleString()}`, tone: financials.revenue > 0 ? 'positive' : 'neutral' },
+              { label: 'Gross margin', value: `₹${financials.grossMargin.toLocaleString()}`, tone: financials.grossMargin >= 0 ? 'positive' : 'negative' },
+              { label: 'Cash change', value: this.formatSignedCurrency(financials.cashChange), tone: financials.cashChange >= 0 ? 'positive' : 'negative' },
               { label: 'Khata due', value: `₹${khataDue.toLocaleString()}`, tone: khataDue > 0 ? 'warning' : 'positive' },
-              { label: 'Losses', value: `₹${losses.toLocaleString()}`, tone: losses > 0 ? 'warning' : 'positive' },
             ],
-            `Khata added ₹${result.khataAdded.toLocaleString()} · collected ₹${result.khataCollected.toLocaleString()}`
+            `Cash now ₹${result.cash.toLocaleString()} · stock bought ₹${financials.purchaseSpend.toLocaleString()} · losses ₹${losses.toLocaleString()}`
           )}
           ${this.renderExecutiveGroup(
             'Inventory',
@@ -3834,7 +3854,79 @@ export class UIManager {
   }
 
   private getTotalRevenue(result: DayResult): number {
-    return result.customerVisits.reduce((sum, visit) => sum + visit.revenue, 0);
+    return result.productResults.reduce((sum, row) => sum + row.revenue, 0);
+  }
+
+  private getFinancialSummary(result: DayResult, state?: GameState, knownLog?: DayLog): FinancialSummary {
+    const log = knownLog ?? state?.history.find((entry) => entry.day === result.day);
+    const revenue = Math.round(result.productResults.reduce((sum, row) => sum + row.revenue, 0));
+    const costOfGoods = Math.round(result.productResults.reduce((sum, row) => sum + row.costOfGoods, 0));
+    const grossMargin = revenue - costOfGoods;
+    const purchaseSpend = this.getActionPurchaseSpend(log?.playerActions, result);
+    const marketingSpend = Math.round(result.marketingPerformance?.spendToday ?? this.getActionMarketingSpend(log?.playerActions));
+    const wasteLoss = Math.round(result.wasteLoss);
+    const removalLoss = Math.round(result.removalLoss);
+    const operatingProfit = grossMargin - wasteLoss - removalLoss - marketingSpend;
+    const cashChange = Math.round(result.cash - (log?.visibleStateBefore.cash ?? (result.cash - operatingProfit)));
+
+    return {
+      revenue,
+      costOfGoods,
+      grossMargin,
+      purchaseSpend,
+      marketingSpend,
+      wasteLoss,
+      removalLoss,
+      operatingProfit,
+      cashChange,
+    };
+  }
+
+  private getRunFinancialSummary(state: GameState): FinancialSummary {
+    return state.history.reduce<FinancialSummary>((sum, log) => {
+      const day = this.getFinancialSummary(log.results, undefined, log);
+      return {
+        revenue: sum.revenue + day.revenue,
+        costOfGoods: sum.costOfGoods + day.costOfGoods,
+        grossMargin: sum.grossMargin + day.grossMargin,
+        purchaseSpend: sum.purchaseSpend + day.purchaseSpend,
+        marketingSpend: sum.marketingSpend + day.marketingSpend,
+        wasteLoss: sum.wasteLoss + day.wasteLoss,
+        removalLoss: sum.removalLoss + day.removalLoss,
+        operatingProfit: sum.operatingProfit + day.operatingProfit,
+        cashChange: sum.cashChange + day.cashChange,
+      };
+    }, {
+      revenue: 0,
+      costOfGoods: 0,
+      grossMargin: 0,
+      purchaseSpend: 0,
+      marketingSpend: 0,
+      wasteLoss: 0,
+      removalLoss: 0,
+      operatingProfit: 0,
+      cashChange: 0,
+    });
+  }
+
+  private getActionPurchaseSpend(actions: PlayerActions | undefined, result: DayResult): number {
+    if (actions) {
+      return Math.round(Object.entries(actions.orders).reduce((sum, [productId, quantity]) => {
+        const product = PRODUCTS.find((item) => item.id === productId);
+        return sum + (quantity ?? 0) * (product?.costPrice ?? 0);
+      }, 0));
+    }
+
+    return Math.round(result.inventoryMovements.reduce((sum, row) => {
+      const product = PRODUCTS.find((item) => item.id === row.productId);
+      return sum + row.ordered * (product?.costPrice ?? 0);
+    }, 0));
+  }
+
+  private getActionMarketingSpend(actions?: PlayerActions): number {
+    return Math.round((actions?.marketingActions ?? []).reduce((sum, selection) => {
+      return sum + (getMarketingCampaign(selection.specId)?.cost ?? 0);
+    }, 0));
   }
 
   private getMissedRevenue(result: DayResult): number {
@@ -3842,11 +3934,6 @@ export class UIManager {
       const product = PRODUCTS.find((p) => p.id === row.productId);
       return sum + row.missedDemand * (product?.sellPrice ?? 0);
     }, 0);
-  }
-
-  private getCashDelta(result: DayResult, state: GameState): number {
-    const log = state.history.find((entry) => entry.day === result.day);
-    return Math.round(result.cash - (log?.visibleStateBefore.cash ?? (result.cash - result.profit)));
   }
 
   private getDailyShopStatus(result: DayResult): { label: string; detail: string; tone: 'positive' | 'negative' | 'warning' | 'neutral' } {

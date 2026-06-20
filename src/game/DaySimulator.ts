@@ -100,7 +100,7 @@ export class DaySimulator {
     const khataAdded = customerVisits.reduce((sum, visit) => sum + visit.khataAmount, 0);
     const cashRevenue = customerVisits.reduce((sum, visit) => sum + visit.amountPaid, 0);
     const marketingCost = options.marketingCost ?? 0;
-    const profit = totalRevenue - totalCostOfGoods - totalOrderCost - totalWasteLoss - totalRemovalLoss - marketingCost;
+    const profit = totalRevenue - totalCostOfGoods - totalWasteLoss - totalRemovalLoss - marketingCost;
     const newCash = state.cash - totalOrderCost - marketingCost + cashRevenue + khataCollected;
     const inventoryMovements = ledger.buildMovements(inv, productResults, actions.discounts, weather, fridgePressure);
     const marketingPerformanceBase = this.calculateMarketingPerformance(

@@ -186,7 +186,7 @@ Daily reward score is split into buckets.
 | --- | --- | --- |
 | Service | Serving customer demand, especially named customers | missed named visits and stockouts |
 | Inventory | low missed units, healthy closing stock, low waste | stockouts, overstocked perishables, risk cost |
-| Money | profit, khata collection, cash buffer | khata added, low cash |
+| Money | operating profit, khata collection, cash buffer | khata added, low cash |
 | Relationships | fulfilled named customers, trust gains | missed regulars, trust drops |
 | Marketing | served promoted demand, ROI, no promoted stockouts | missed promoted demand, poor ROI |
 | Operations | useful ordering, offers, reminders, removals | no direct penalty here |

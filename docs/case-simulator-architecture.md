@@ -71,7 +71,7 @@ Daily score should measure shopkeeper competence. It is not an arcade counter.
 | --- | --- |
 | Service | Fulfilling customer demand, especially named regulars |
 | Inventory | Healthy closing stock, low missed demand, low waste |
-| Money | Profit, cash discipline, khata collection |
+| Money | Operating profit, cash discipline, khata collection |
 | Relationships | Customer trust, repeat visits, responsible reminders |
 | Operations | Corrective actions: ordering, offers, removals, reminders |
 | Penalties | Stockouts, waste, excessive khata, avoidable removals |

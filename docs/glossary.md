@@ -50,7 +50,7 @@ Reward for serving customer demand, especially named customers.
 Reward for avoiding stockouts, waste, unhealthy closing stock, and perishable risk.
 
 **Money Score**  
-Reward for profit, cash buffer, and khata collection.
+Reward for operating profit, cash buffer, and khata collection. Operating profit means gross margin minus waste, removals, and marketing spend; inventory purchases affect cash separately.
 
 **Relationship Score**  
 Reward for protecting named customers and trust.
@@ -89,4 +89,3 @@ Write-ahead logging mode used by the local SQLite DB for safer concurrent reads/
 
 **Wholesaler Cart**  
 The saved item-level order/removal/offer plan before opening the next day.
-
