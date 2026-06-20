@@ -1,4 +1,7 @@
 import Fastify from 'fastify';
+import { createReadStream, existsSync } from 'node:fs';
+import { stat } from 'node:fs/promises';
+import { extname, join, resolve } from 'node:path';
 import type { PlayerActions, RunObservation } from '../src/types';
 import { PRODUCTS, DEFAULT_CONFIG } from '../src/constants/products';
 import { GameState } from '../src/game/GameState';
@@ -14,6 +17,7 @@ const db = openDatabase();
 const store = new RunStore(db);
 const port = Number(process.env.KIRANA_SERVER_PORT ?? 8787);
 const host = process.env.KIRANA_SERVER_HOST ?? '127.0.0.1';
+const staticRoot = resolve(process.cwd(), process.env.KIRANA_STATIC_ROOT ?? 'dist');
 
 app.setErrorHandler((error, _request, reply) => {
   const message = error.message || 'Request failed';
@@ -115,6 +119,21 @@ app.post('/api/llm-day-context', async (request, reply) => {
   }
   return context;
 });
+
+if (process.env.KIRANA_SERVE_STATIC !== 'false' && existsSync(staticRoot)) {
+  app.get('/*', async (request, reply) => {
+    const urlPath = decodeURIComponent((request.params as { '*': string })['*'] ?? '');
+    const safePath = urlPath.split('/').filter((part) => part && part !== '..').join('/');
+    const candidate = resolve(staticRoot, safePath);
+    const target = candidate.startsWith(staticRoot) && await isReadableFile(candidate)
+      ? candidate
+      : join(staticRoot, 'index.html');
+
+    return reply
+      .type(contentTypeFor(target))
+      .send(createReadStream(target));
+  });
+}
 
 function runAiBenchmark(profile: string, model: string) {
   const observation = store.createRun('ai');
@@ -365,6 +384,27 @@ function parseJsonContent(content: string) {
       return undefined;
     }
   }
+}
+
+async function isReadableFile(path: string): Promise<boolean> {
+  try {
+    return (await stat(path)).isFile();
+  } catch {
+    return false;
+  }
+}
+
+function contentTypeFor(path: string): string {
+  const types: Record<string, string> = {
+    '.css': 'text/css; charset=utf-8',
+    '.html': 'text/html; charset=utf-8',
+    '.js': 'text/javascript; charset=utf-8',
+    '.json': 'application/json; charset=utf-8',
+    '.png': 'image/png',
+    '.svg': 'image/svg+xml',
+    '.webp': 'image/webp',
+  };
+  return types[extname(path)] ?? 'application/octet-stream';
 }
 
 process.on('SIGINT', async () => {
