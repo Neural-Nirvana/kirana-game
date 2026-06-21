@@ -13,13 +13,19 @@ Use this folder when you want to understand the game beyond the top-level README
 3. [Architecture](architecture.md)  
    How the frontend, backend, SQLite database, sessions, and simulation modules fit together.
 
-4. [API Reference](api-reference.md)  
+4. [AI Arena](ai-arena.md)  
+   How LLMs and heuristic agents can play full 30-day runs through JSON observations and actions.
+
+5. [AI Model Performance Ledger](ai-model-performance.md)  
+   Saved benchmark results for LLM arena runs, including model settings, scores, latency, and service rates.
+
+6. [API Reference](api-reference.md)  
    REST endpoints, player sessions, run APIs, AI replay APIs, OpenEnv APIs, and common errors.
 
-5. [Deployment](deployment.md)  
+7. [Deployment](deployment.md)  
    Local development, production service shape, current GCP VM setup, and update flow.
 
-6. [Glossary](glossary.md)  
+8. [Glossary](glossary.md)  
    Short definitions for gameplay and technical terms.
 
 ## Historical Planning Documents
@@ -29,4 +35,3 @@ These are still useful for design intent, but the current source of truth is the
 - [Case Simulator Architecture](case-simulator-architecture.md)
 - [Backend, Database, Marketing, and AI Players Plan](kirana-backend-ai-marketing-plan.md)
 - [UI Mockup HTML](ui-mockups/kirana-gameplay-sections.html)
-

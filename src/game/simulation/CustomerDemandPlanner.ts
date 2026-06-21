@@ -110,6 +110,7 @@ export class CustomerDemandPlanner {
           visitReasons: visitPlan.reasons,
           demandReasons: basketPlan.reasons,
           visitProbability: visitPlan.probability,
+          trustRecoveryBoost: visitPlan.trustRecoveryBoost,
         }];
       })
       .filter((visit) => visit.basket.length > 0);
@@ -122,12 +123,19 @@ export class CustomerDemandPlanner {
     events: string[],
     marketingEffects: MarketingEffect[],
     environmentContext: EnvironmentContext
-  ): { shouldVisit: boolean; probability: number; reasons: string[] } {
+  ): { shouldVisit: boolean; probability: number; reasons: string[]; trustRecoveryBoost: number } {
     let cadence = Math.max(1, customer.cadence);
     const isFestival = events.includes('festival_weekend');
     const isSchoolWeek = day >= 4 && day <= 6;
     const wantsColdDrinks = customer.usualBasket.some((line) => line.productId === 'cold_drinks');
     const reasons: string[] = [];
+    const marketingLift = this.getMarketingVisitLift(customer.segment, marketingEffects);
+    const trustRecoveryBoost = this.getTrustRecoveryBoost(customer, marketingEffects);
+
+    if (trustRecoveryBoost > 0) {
+      cadence = 1;
+      reasons.push(trustRecoveryBoost >= 4 ? 'Recovery call invited at-risk customer' : 'Relationship campaign rebuilt confidence');
+    }
 
     if (isFestival && ['family', 'student', 'snack'].includes(customer.segment)) {
       cadence = 1;
@@ -145,9 +153,8 @@ export class CustomerDemandPlanner {
     const cadenceDue = cadence === 1 || (day + customer.visitOffset) % cadence === 0;
     if (cadenceDue) reasons.unshift('Regular cadence');
 
-    const marketingLift = this.getMarketingVisitLift(customer.segment, marketingEffects);
-    if (customer.trust < 45 && customer.failedVisits > customer.successfulVisits && marketingLift <= 1.03) {
-      return { shouldVisit: false, probability: 0, reasons: ['Trust too low after repeated misses'] };
+    if (customer.trust < 45 && customer.failedVisits > customer.successfulVisits && trustRecoveryBoost <= 0 && marketingLift <= 1.03) {
+      return { shouldVisit: false, probability: 0, reasons: ['Trust too low after repeated misses'], trustRecoveryBoost: 0 };
     }
 
     let probability = cadenceDue ? 0.92 : 0.06;
@@ -173,6 +180,7 @@ export class CustomerDemandPlanner {
       shouldVisit: this.demandEngine.chance(probability),
       probability,
       reasons: this.uniqueReasons(reasons),
+      trustRecoveryBoost,
     };
   }
 
@@ -244,8 +252,10 @@ export class CustomerDemandPlanner {
     const demandReasons: string[] = [`Forecast confidence ${environmentContext.confidence} (±${environmentContext.randomnessPct}%)`];
     const visitReasons: string[] = ['Walk-in footfall'];
     const walkInMultiplier = environmentContext.segmentVisitMultipliers.walkin ?? 1;
+    const marketingVisitLift = this.getMarketingVisitLift('walkin', marketingEffects);
     if (walkInMultiplier > 1.03) visitReasons.push('Environment lifted walk-ins');
     if (walkInMultiplier < 0.97) visitReasons.push('Environment reduced walk-ins');
+    if (marketingVisitLift > 1.01) visitReasons.push('Marketing lifted walk-in footfall');
 
     for (const product of PRODUCTS) {
       const forecast = this.demandEngine.getForecast(product.id, day, trust, weather, events);
@@ -257,6 +267,7 @@ export class CustomerDemandPlanner {
         discountLift *
         marketingLift *
         walkInMultiplier *
+        marketingVisitLift *
         waveFactor *
         this.demandEngine.randomFactor(environmentContext.randomnessPct)
       );
@@ -326,6 +337,19 @@ export class CustomerDemandPlanner {
       if (!effect.segments.includes(segment)) return lift;
       return lift * effect.visitMultiplier;
     }, 1);
+  }
+
+  private getTrustRecoveryBoost(customer: CustomerProfile, marketingEffects: MarketingEffect[]): number {
+    return marketingEffects.reduce((boost, effect) => {
+      if (!effect.segments.includes(customer.segment)) return boost;
+      if (effect.specId === 'recovery_call' && customer.trust < 60 && customer.failedVisits > customer.successfulVisits) {
+        return Math.max(boost, 4);
+      }
+      if (effect.specId === 'loyalty_card' && customer.trust < 75) {
+        return Math.max(boost, 2);
+      }
+      return boost;
+    }, 0);
   }
 
   private productEnvironmentReason(productId: ProductId, environmentContext: EnvironmentContext): string {

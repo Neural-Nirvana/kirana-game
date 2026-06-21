@@ -221,6 +221,177 @@ Returns an AI run only if the run is an AI run.
 
 Human player runs are rejected with `404` through this endpoint.
 
+## AI Arena APIs
+
+AI Arena runs let one or more models play a full 30-day game through JSON observations and JSON actions.
+
+Important semantics:
+
+- 1 arena episode = 1 full 30-day game
+- 1 arena step = 1 in-game day
+- 1 model action = the plan submitted before that day opens
+- 1 reward = the day score returned after simulation
+
+### `GET /api/arena/system-prompt`
+
+Returns the system prompt, action schema, response schema, max days, and the `oneStepEqualsOneDay` flag.
+
+Use this when building an external OpenEnv runner or comparing prompts.
+
+### `GET /api/arena/models`
+
+Returns local presets and, when OpenRouter is reachable, live model hints for Kimi, GLM, DeepSeek, and Flash-like model families.
+
+Response includes:
+
+- `presets`
+- `available`
+- `note`
+
+Exact model IDs are passed through to OpenRouter, so callers can supply any current OpenRouter model id.
+
+### `POST /api/arena/runs`
+
+Starts an asynchronous arena job.
+
+Request:
+
+```json
+{
+  "mode": "llm",
+  "models": ["z-ai/glm-5.2"],
+  "maxDays": 30,
+  "temperature": 0.25,
+  "profile": "balanced",
+  "requireJsonSchema": false,
+  "requireParameters": true,
+  "observationMode": "compact",
+  "responseMode": "json_schema",
+  "reasoning": "off",
+  "timeoutMs": 90000,
+  "maxTokens": 1000
+}
+```
+
+For a no-network smoke test:
+
+```json
+{
+  "mode": "heuristic",
+  "maxDays": 30
+}
+```
+
+Response:
+
+```json
+{
+  "arenaId": "arena-job-id",
+  "status": "queued",
+  "mode": "llm",
+  "models": ["z-ai/glm-5.2"],
+  "maxDays": 30,
+  "createdAt": "2026-06-20T...",
+  "updatedAt": "2026-06-20T...",
+  "runs": []
+}
+```
+
+LLM mode requires:
+
+```text
+OPENROUTER_API_KEY
+```
+
+Optional LLM tuning fields:
+
+- `observationMode`: `full` or `compact`
+- `responseMode`: `json_schema`, `json_object`, or `text`
+- `reasoning`: `off`, `medium`, `high`, or `xhigh`
+- `requireJsonSchema`: when `true`, the arena does not fall back to plain text if schema generation fails
+- `requireParameters`: when `true`, structured-output calls ask OpenRouter to route only to providers that support required parameters
+- `timeoutMs`: per-model call timeout, clamped to 15s-15m
+- `maxTokens`: model output token limit, clamped to 400-16000
+
+### `POST /api/arena/deepseek-flash-runs`
+
+Starts an arena job tuned for `deepseek/deepseek-v4-flash`.
+
+Defaults:
+
+```json
+{
+  "mode": "llm",
+  "models": ["deepseek/deepseek-v4-flash"],
+  "observationMode": "compact",
+  "responseMode": "json_schema",
+  "reasoning": "off",
+  "temperature": 0.15,
+  "maxTokens": 1000,
+  "timeoutMs": 90000
+}
+```
+
+Request:
+
+```json
+{
+  "maxDays": 1
+}
+```
+
+Use this endpoint first for provider smoke tests before running a full 30-day LLM tournament.
+
+### `POST /api/arena/max-capability-runs`
+
+Starts an arena job with the same high-capability settings for every model in the request. Use this for fair model comparisons where latency and token cost are allowed to rise.
+
+Defaults:
+
+```json
+{
+  "mode": "llm",
+  "profile": "max_capability",
+  "observationMode": "compact",
+  "responseMode": "json_schema",
+  "reasoning": "medium",
+  "temperature": 0.15,
+  "requireJsonSchema": true,
+  "requireParameters": true,
+  "maxTokens": 16000,
+  "timeoutMs": 900000
+}
+```
+
+Request:
+
+```json
+{
+  "models": [
+    "z-ai/glm-5.2",
+    "deepseek/deepseek-v4-flash",
+    "google/gemma-4-26b-a4b-it"
+  ],
+  "maxDays": 30
+}
+```
+
+### `GET /api/arena/runs/:arenaId`
+
+Returns the current arena job state, including each model run's progress and day-level decisions.
+
+Response fields:
+
+- `status`: `queued`, `running`, `complete`, or `failed`
+- `runs[].runId`: backend run id for replay/history lookup
+- `runs[].day`
+- `runs[].totalReward`
+- `runs[].finalCash`
+- `runs[].finalTrust`
+- `runs[].decisions[]`
+
+Each decision contains the action JSON, rationale, reward, cash, trust, cumulative score, latency, retry count, and any validation error.
+
 ## OpenEnv-Compatible APIs
 
 OpenEnv runs are unowned environment episodes. They are isolated from human player runs.

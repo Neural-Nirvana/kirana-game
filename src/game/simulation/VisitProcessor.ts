@@ -61,8 +61,12 @@ export class VisitProcessor {
         ? 'missed'
         : 'partial';
     const payment = this.resolvePayment(params.planned.customer, revenue, outcome, params.khataPressure, params.random);
-    const trustDelta = this.calculateCustomerTrustDelta(params.planned.customer, outcome, missed);
-    const note = this.getVisitNote(outcome, missed, params.planned.customer);
+    const trustDelta = this.applyTrustRecoveryBoost(
+      this.calculateCustomerTrustDelta(params.planned.customer, outcome, missed),
+      outcome,
+      params.planned.trustRecoveryBoost ?? 0
+    );
+    const note = this.getVisitNote(outcome, missed, params.planned.customer, params.planned.trustRecoveryBoost ?? 0);
 
     if (params.planned.customer) {
       this.recordCustomerVisit(
@@ -160,6 +164,17 @@ export class VisitProcessor {
     return -Math.max(4, Math.min(12, missedPenalty + 3));
   }
 
+  private applyTrustRecoveryBoost(
+    baseDelta: number,
+    outcome: CustomerVisitOutcome,
+    trustRecoveryBoost: number
+  ): number {
+    if (trustRecoveryBoost <= 0) return baseDelta;
+    if (outcome === 'fulfilled') return baseDelta + trustRecoveryBoost;
+    if (outcome === 'partial') return baseDelta + Math.floor(trustRecoveryBoost / 2);
+    return baseDelta;
+  }
+
   private getMissedLinePenalty(line: CustomerOrderLine): number {
     const product = PRODUCTS.find((p) => p.id === line.productId);
     const impact = product?.trustImpact ?? 'low';
@@ -207,9 +222,13 @@ export class VisitProcessor {
   private getVisitNote(
     outcome: CustomerVisitOutcome,
     missed: CustomerOrderLine[],
-    customer: CustomerProfile | undefined
+    customer: CustomerProfile | undefined,
+    trustRecoveryBoost: number
   ): string {
     if (outcome === 'fulfilled') {
+      if (customer && trustRecoveryBoost > 0) {
+        return 'Full basket served after relationship outreach; trust recovered.';
+      }
       return customer ? 'Full basket served; relationship improved.' : 'Walk-in demand served.';
     }
 

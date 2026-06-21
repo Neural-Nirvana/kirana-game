@@ -106,9 +106,6 @@ export class EnvironmentContextEngine {
     }
 
     for (const effect of params.marketingEffects ?? []) {
-      for (const segment of effect.segments) {
-        this.multiplySegment(segmentVisitMultipliers, segment, effect.visitMultiplier);
-      }
       signals.push(`Active marketing ${effect.specId} lifts ${effect.segments.slice(0, 3).join(', ')} visits`);
     }
 

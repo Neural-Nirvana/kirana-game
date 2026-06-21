@@ -5,6 +5,7 @@ import { extname, join, resolve } from 'node:path';
 import type { PlayerActions, RunObservation } from '../src/types';
 import { PRODUCTS, DEFAULT_CONFIG } from '../src/constants/products';
 import { GameState } from '../src/game/GameState';
+import { createAiArena, type ArenaStartRequest } from './ai-arena';
 import { openDatabase } from './db';
 import { loadLocalEnv } from './env';
 import { normalizeActions } from './marketing-engine';
@@ -18,6 +19,7 @@ const app = Fastify({ logger: true });
 const db = openDatabase();
 const store = new RunStore(db);
 const sessions = new SessionStore(db);
+const arena = createAiArena({ store });
 const port = Number(process.env.KIRANA_SERVER_PORT ?? 8787);
 const host = process.env.KIRANA_SERVER_HOST ?? '127.0.0.1';
 const staticRoot = resolve(process.cwd(), process.env.KIRANA_STATIC_ROOT ?? 'dist');
@@ -179,6 +181,30 @@ app.get('/api/ai-runs/:runId', async (request) => {
     timeline: store.getTimeline(runId),
     decisions: store.getAiDecisions(runId),
   };
+});
+
+app.get('/api/arena/system-prompt', async () => arena.systemPrompt());
+
+app.get('/api/arena/models', async () => arena.models());
+
+app.post('/api/arena/runs', async (request) => {
+  const body = request.body as ArenaStartRequest | undefined;
+  return arena.start(body ?? {});
+});
+
+app.post('/api/arena/deepseek-flash-runs', async (request) => {
+  const body = request.body as Omit<ArenaStartRequest, 'models' | 'mode'> | undefined;
+  return arena.startDeepSeekFlash(body ?? {});
+});
+
+app.post('/api/arena/max-capability-runs', async (request) => {
+  const body = request.body as Omit<ArenaStartRequest, 'mode'> | undefined;
+  return arena.startMaxCapability(body ?? {});
+});
+
+app.get('/api/arena/runs/:arenaId', async (request) => {
+  const { arenaId } = request.params as { arenaId: string };
+  return arena.get(arenaId);
 });
 
 app.post('/api/llm-day-context', async (request, reply) => {

@@ -12,4 +12,5 @@ export interface PlannedVisit {
   visitReasons: string[];
   demandReasons: string[];
   visitProbability?: number;
+  trustRecoveryBoost?: number;
 }

@@ -33,7 +33,8 @@ Backend
 | `src/game/simulation/*` | Demand planning, visits, inventory ledger, khata. |
 | `src/game/scoring/ScoringEngine.ts` | Daily reward buckets and total score. |
 | `src/game/progression/*` | difficulty, events, environment signals, AI day context client. |
-| `server/index.ts` | Fastify routes, static serving, AI replay runner, OpenRouter call. |
+| `server/index.ts` | Fastify routes, static serving, AI replay runner, AI arena routes, OpenRouter context call. |
+| `server/ai-arena.ts` | LLM/heuristic arena loop, prompt/schema contract, OpenRouter action calls, validation retry, fallback action. |
 | `server/run-store.ts` | SQLite persistence for runs and day data. |
 | `server/session-store.ts` | Player-name sessions and run listing. |
 | `server/db.ts` | SQLite schema and lightweight migrations. |
@@ -166,6 +167,32 @@ Invalid AI actions get a conservative fallback.
 
 The current agent is heuristic-first. The architecture is ready for OpenRouter-driven agents, but gameplay memory should remain in SQLite.
 
+## AI Arena
+
+AI Arena is the richer LLM/OpenEnv loop.
+
+Semantics:
+
+```text
+1 episode = 1 full 30-day run
+1 step = 1 simulated shop day
+1 action JSON = one day of shopkeeper decisions
+1 reward = that day score
+```
+
+The arena:
+
+1. creates an unowned AI run
+2. builds a JSON observation with environment, inventory, customers, marketing, recent history, and reward rules
+3. sends the observation plus system prompt to a model through OpenRouter, or uses the built-in heuristic mode
+4. sanitizes and validates the returned action JSON
+5. gives LLMs one retry with validation feedback if the action is invalid
+6. falls back to a conservative action if the retry fails
+7. stores each decision in `ai_decisions` and compact memory in `ai_memory_summaries`
+8. repeats until Day 30
+
+The prompt/schema contract is exposed through `GET /api/arena/system-prompt`. Exact OpenRouter model IDs are pass-through inputs to `POST /api/arena/runs`.
+
 ## Static Serving
 
 Production can serve the built frontend from the backend.
@@ -187,4 +214,3 @@ For local dev, Vite proxies `/api` to the backend.
 - OpenEnv-created runs are unowned and isolated from human runs.
 - AI runs are AI-owned and isolated from human runs.
 - LLM context explains environment only; it does not control gameplay math.
-
