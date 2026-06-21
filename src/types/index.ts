@@ -183,10 +183,26 @@ export interface CustomerVisitRecord {
   khataAmount: number;
 }
 
+export interface CustomerBehaviorProfile {
+  groupId: string;
+  persona: string;
+  loyaltyTier: 'new' | 'casual' | 'regular' | 'anchor';
+  patience: number;
+  promotionAffinity: number;
+  environmentSensitivity: number;
+  relationshipSensitivity: number;
+  khataReliability: number;
+  basketFlexibility: number;
+  acquisitionSource?: string;
+}
+
 export interface CustomerProfile {
   id: string;
   name: string;
   segment: CustomerSegment;
+  groupId?: string;
+  persona?: string;
+  behavior?: CustomerBehaviorProfile;
   preferredWave: CustomerWave;
   cadence: number;
   visitOffset: number;
@@ -284,6 +300,15 @@ export interface MarketingPerformance {
   score: number;
 }
 
+export interface TrustBreakdown {
+  stockoutPenalty: number;
+  essentialServiceBonus: number;
+  namedCustomerEffect: number;
+  noStockoutBonus: number;
+  total: number;
+  notes: string[];
+}
+
 export interface DayResult {
   day: number;
   profit: number;
@@ -293,6 +318,7 @@ export interface DayResult {
   khataCollected: number;
   stockouts: number;
   trustChange: number;
+  trustBreakdown?: TrustBreakdown;
   trust: number;
   cash: number;
   productResults: SimulationResult[];

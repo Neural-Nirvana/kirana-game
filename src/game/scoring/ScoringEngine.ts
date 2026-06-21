@@ -9,6 +9,7 @@ export interface ScoringInput {
   khataCollected: number;
   stockoutCount: number;
   noStockouts: boolean;
+  trustChange: number;
   currentCash: number;
   actions: PlayerActions;
   customerVisits: CustomerVisit[];
@@ -83,10 +84,11 @@ export class ScoringEngine {
 
     const trustDelta = namedVisits.reduce((sum, visit) => sum + visit.trustDelta, 0);
     const fulfilledNamedVisits = namedVisits.filter((visit) => visit.outcome === 'fulfilled').length;
+    const shopTrustEffect = Math.round(input.trustChange * 1.4);
     const relationship = this.clamp(
-      Math.round(trustDelta * 1.5) + fulfilledNamedVisits * 2 - missedNamedVisits * 4,
-      -25,
-      20
+      Math.round(trustDelta * 1.5) + fulfilledNamedVisits * 2 - missedNamedVisits * 4 + shopTrustEffect,
+      -35,
+      25
     );
 
     const orderDiversity = Object.values(input.actions.orders).filter((quantity) => (quantity ?? 0) > 0).length;

@@ -184,7 +184,17 @@ Response:
   "runId": "run-id",
   "observation": {},
   "log": {},
-  "result": {}
+  "result": {
+    "trustChange": 3,
+    "trustBreakdown": {
+      "stockoutPenalty": -1,
+      "essentialServiceBonus": 1,
+      "namedCustomerEffect": 1,
+      "noStockoutBonus": 2,
+      "total": 3,
+      "notes": ["Milk stockout -1", "Essentials served +1"]
+    }
+  }
 }
 ```
 

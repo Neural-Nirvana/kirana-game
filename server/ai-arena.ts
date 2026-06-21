@@ -30,6 +30,11 @@ export const AI_ARENA_SYSTEM_PROMPT = [
   'Maximize total 30-day reward, not only same-day revenue. Balance operating profit, customer trust, service rate, waste, khata discipline, marketing ROI, and cash survival.',
   'Orders must respect product pack sizes and available cash. Marketing is useful only when promoted demand can be served. Discounts can clear existing inventory but reduce margin.',
   'Order quantities are item units, not supplier pack counts. Example: milk 10 means 10 L, bread 5 means 5 packs, cold_drinks 12 means 12 bottles.',
+  'The action JSON is the source of truth. First decide the executable action, then write a rationale that only describes what is actually present in action.',
+  'If you mention a campaign, promotion, offer, WhatsApp status, khata reminder, recovery call, or discount in rationale, the matching action field must be filled. Otherwise it did not happen.',
+  'Marketing example: "marketingActions":[{"specId":"chalkboard_offer","targetProducts":["chips","cold_drinks","maggi"]}].',
+  'Khata example: "khataReminders":["mrs_sharma","office_regular"]. Discount example: "discounts":{"bananas":15}. Use numbers only: 10, 15, or 20; do not write "10%" strings.',
+  'Use the word discount only when action.discounts has a positive number for that item. Use the word campaign or marketing for marketingActions instead of calling campaigns discounts.',
   'Use the environment signals to infer demand pressure. Do not ask for hidden demand forecasts. Do not invent products, campaigns, or customers.',
   'Return only JSON matching the schema: { "action": PlayerActions, "rationale": string }. No markdown.',
 ].join(' ');
@@ -292,7 +297,7 @@ async function runArenaJob(store: RunStore, job: ArenaJob, request: ArenaStartRe
   job.status = 'running';
   job.updatedAt = new Date().toISOString();
 
-  for (const runSummary of job.runs) {
+  await Promise.all(job.runs.map(async (runSummary) => {
     runSummary.status = 'running';
     job.updatedAt = new Date().toISOString();
     try {
@@ -304,7 +309,7 @@ async function runArenaJob(store: RunStore, job: ArenaJob, request: ArenaStartRe
     } finally {
       job.updatedAt = new Date().toISOString();
     }
-  }
+  }));
 
   job.status = job.runs.some((run) => run.status === 'failed') ? 'failed' : 'complete';
   job.updatedAt = new Date().toISOString();
@@ -506,12 +511,94 @@ function validateArenaDecisionQuality(observation: RunObservation, decision: Are
     ].join(' '));
   }
 
+  const mentionedCampaignIds = getMentionedCampaignIds(decision.rationale, observation.availableMarketing);
+  const selectedCampaignIds = new Set((decision.action.marketingActions ?? []).map((action) => action.specId));
+  const missingCampaignIds = mentionedCampaignIds.filter((campaignId) => !selectedCampaignIds.has(campaignId));
+  if (missingCampaignIds.length > 0) {
+    errors.push([
+      `Rationale says to run marketing campaign(s) ${missingCampaignIds.join(', ')}, but action.marketingActions does not include them.`,
+      'Add entries like {"specId":"chalkboard_offer","targetProducts":["chips","cold_drinks","maggi"]}, or remove the campaign claim from rationale.',
+    ].join(' '));
+  } else if (mentionsGenericMarketingIntent(decision.rationale) && (decision.action.marketingActions ?? []).length === 0) {
+    errors.push([
+      'Rationale says to run marketing or a promotion, but action.marketingActions is empty.',
+      'If marketing is intended, include a valid available campaign with targetProducts. If not, remove the marketing claim from rationale.',
+    ].join(' '));
+  }
+
+  const khataCustomers = state.customers.filter((customer) => customer.khataBalance > 0);
+  if (mentionsKhataReminderIntent(decision.rationale) && (decision.action.khataReminders ?? []).length === 0 && khataCustomers.length > 0) {
+    const exampleIds = khataCustomers.slice(0, 3).map((customer) => customer.id);
+    errors.push([
+      'Rationale says to send khata/payment reminders, but action.khataReminders is empty.',
+      `Add customer id(s), for example ${JSON.stringify(exampleIds)}, or remove the khata reminder claim from rationale.`,
+    ].join(' '));
+  }
+
+  const missingDiscounts = getRationaleDiscountMentions(decision.rationale)
+    .filter((productId) => (decision.action.discounts[productId] ?? 0) <= 0);
+  if (missingDiscounts.length > 0) {
+    errors.push([
+      `Rationale says to discount ${missingDiscounts.join(', ')}, but action.discounts does not include a positive discount for them.`,
+      'Use one of 10, 15, or 20, or remove the discount claim from rationale.',
+    ].join(' '));
+  }
+
   return errors;
+}
+
+function getMentionedCampaignIds(
+  rationale: string,
+  availableCampaigns: RunObservation['availableMarketing']
+): string[] {
+  if (hasNegativeMarketingIntent(rationale)) return [];
+  const normalized = normalizeRationaleText(rationale);
+  return availableCampaigns
+    .filter((campaign) => {
+      const candidates = [
+        campaign.id,
+        campaign.name,
+        campaign.name.replace(/\s+/g, '_'),
+      ].map(normalizeRationaleText);
+      return candidates.some((candidate) => candidate.length > 2 && normalized.includes(candidate));
+    })
+    .map((campaign) => campaign.id);
+}
+
+function mentionsGenericMarketingIntent(rationale: string): boolean {
+  if (hasNegativeMarketingIntent(rationale)) return false;
+  const lower = rationale.toLowerCase();
+  return /(activate|run|start|launch|select|use|deploy|schedule|book|promote|push)\s+(a\s+)?(marketing|campaign|promotion|offer|whatsapp|status|pamphlet|loyalty|recovery)/i.test(lower)
+    || /(marketing|campaign|promotion)\s+(active|selected|deployed|planned|scheduled|started|launched)/i.test(lower);
+}
+
+function hasNegativeMarketingIntent(rationale: string): boolean {
+  return /\b(no|skip|avoid|without|defer|do not|don't|not running|not use)\s+(marketing|campaign|promotion|offer|whatsapp|status|pamphlet|loyalty|recovery)\b/i.test(rationale);
+}
+
+function mentionsKhataReminderIntent(rationale: string): boolean {
+  if (/\b(no|skip|avoid|without|defer|do not|don't)\s+(khata|reminder|payment reminder|dues reminder|follow[- ]?up)\b/i.test(rationale)) {
+    return false;
+  }
+  return /\b(khata reminder|khata follow[- ]?up|khata recovery|recover khata|collect khata|payment reminder|dues reminder|collect dues|recover dues|recover cash|recover outstanding|send reminder|remind customer|follow up)\b/i.test(rationale);
+}
+
+function getRationaleDiscountMentions(rationale: string): ProductId[] {
+  if (!/\b(discount|discounts|discounted)\b/i.test(rationale)) return [];
+  const positiveDiscountSentences = splitRationaleSentences(rationale)
+    .filter((sentence) => /\b(discount|discounts|discounted)\b/i.test(sentence))
+    .filter((sentence) => !hasNegativeDiscountIntent(sentence))
+    .filter(hasPositiveDiscountIntent);
+  return Array.from(new Set(positiveDiscountSentences.flatMap(getMentionedProducts)));
 }
 
 function getRationaleOrderMentions(rationale: string): ProductId[] {
   const lower = rationale.toLowerCase();
   if (!/(order|buy|stock|purchase)/.test(lower)) return [];
+  return getMentionedProducts(rationale);
+}
+
+function getMentionedProducts(rationale: string): ProductId[] {
   return PRODUCTS
     .filter((product) => {
       const idText = product.id.replace(/_/g, '[ _-]');
@@ -519,6 +606,28 @@ function getRationaleOrderMentions(rationale: string): ProductId[] {
       return new RegExp(`\\b(${idText}|${nameText})\\b`, 'i').test(rationale);
     })
     .map((product) => product.id);
+}
+
+function splitRationaleSentences(rationale: string): string[] {
+  return rationale
+    .split(/[.!?;\n]+/)
+    .map((sentence) => sentence.trim())
+    .filter(Boolean);
+}
+
+function hasNegativeDiscountIntent(text: string): boolean {
+  return /\b(no|skip|avoid|without|defer|do not|don't|not applying|not using|not use|no need for)\b.{0,50}\b(discount|discounts|discounted)\b/i.test(text)
+    || /\b(discount|discounts|discounted)\b.{0,30}\b(not needed|not required|avoided|skipped)\b/i.test(text);
+}
+
+function hasPositiveDiscountIntent(text: string): boolean {
+  return /\b(apply|set|give|run|use|add|select|put|offer)\b.{0,50}\b(discount|discounts|discounted)\b/i.test(text)
+    || /\b(discount|discounts|discounted)\b.{0,50}\b(on|for|to)\b/i.test(text)
+    || /\b(discounting|discounted)\b/i.test(text);
+}
+
+function normalizeRationaleText(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
 }
 
 interface ArenaDecision {
@@ -787,6 +896,11 @@ export function buildArenaObservation(observation: RunObservation, validationFee
     recentDays: recentLogs.map(summarizeDayLog),
     rewardRules: {
       dailyRewardBuckets: ['service', 'inventory', 'money', 'relationships', 'marketing', 'operations', 'penalties'],
+      trustMechanics: [
+        'Shop trust changes from severity-weighted stockouts, named customer trust deltas, essential service, and no-stockout days.',
+        'Small stockouts hurt less than large stockouts, but milk and bread still matter most.',
+        'Serving named customers and using relationship campaigns can help trust recover.',
+      ],
       goodPlay: [
         'Serve high-trust essentials such as milk and bread.',
         'Avoid promoted-product stockouts after marketing.',
@@ -807,6 +921,29 @@ export function buildArenaObservation(observation: RunObservation, validationFee
       maxMarketingSelections: 3,
       budgetRule: 'orders cost + newly selected campaign cost must be <= current cash',
       campaignTargetRule: 'marketingActions.targetProducts must be a non-empty subset of the campaign targetProducts',
+      consistencyRule: 'If rationale says you will run a campaign, send a khata reminder, or apply a discount, the matching action JSON field must contain it.',
+      actionFirstRule: 'The simulator only executes action JSON. Rationale cannot create orders, campaigns, reminders, or discounts.',
+      discountRule: 'discounts values must be numeric percentages from [0,10,15,20]. Example: {"milk":10}. If no shelf discount is intended, use 0 or omit the item and say "No shelf discounts today."',
+    },
+    actionExamples: {
+      marketingAction: {
+        marketingActions: [
+          { specId: 'chalkboard_offer', targetProducts: ['chips', 'cold_drinks', 'maggi'] },
+        ],
+      },
+      khataReminder: {
+        khataReminders: state.customers
+          .filter((customer) => customer.khataBalance > 0)
+          .slice(0, 2)
+          .map((customer) => customer.id),
+      },
+      discountAction: {
+        discounts: { bananas: 15 },
+      },
+      noDiscountAction: {
+        discounts: {},
+        rationaleWording: 'No shelf discounts today.',
+      },
     },
     validationFeedback,
   };
@@ -884,6 +1021,8 @@ export function buildCompactArenaObservation(observation: RunObservation, valida
         .filter((customer) => customer.khataBalance > 0)
         .map((customer) => ({
           id: customer.id,
+          group: customer.groupId,
+          persona: customer.persona,
           segment: customer.segment,
           balance: Math.round(customer.khataBalance),
           trust: Math.round(customer.trust),
@@ -893,6 +1032,8 @@ export function buildCompactArenaObservation(observation: RunObservation, valida
         .filter((customer) => customer.trust < 55 || customer.failedVisits >= 2)
         .map((customer) => ({
           id: customer.id,
+          group: customer.groupId,
+          persona: customer.persona,
           segment: customer.segment,
           trust: Math.round(customer.trust),
           failed: customer.failedVisits,
@@ -926,6 +1067,7 @@ export function buildCompactArenaObservation(observation: RunObservation, valida
         .filter((row) => row.missedDemand > 0)
         .map((row) => [row.productId, row.missedDemand]),
       stockouts: log.results.stockouts,
+      trustBreakdown: log.results.trustBreakdown,
       marketing: log.results.marketingPerformance.score,
     })),
     rules: {
@@ -935,6 +1077,18 @@ export function buildCompactArenaObservation(observation: RunObservation, valida
       budget: 'orders cost + new campaign cost must fit cash',
       orderQuantities: 'orders values are item units, not pack counts. milk 10 = 10 L. cold_drinks 12 = 12 bottles.',
       objective: 'maximize 30-day reward while keeping trust, cash, service, marketing ROI, and low waste',
+      trust: 'Trust changes from stockout severity + named customer trust + essential service + no-stockout bonus. Recent days include trustBreakdown.',
+      consistency: 'If rationale says campaign/reminder/discount, the matching action field must be non-empty. The simulator executes JSON only.',
+      discountFormat: 'Use numeric discount values only: {"milk":10}, not "10%". If no discount is intended, say "No shelf discounts today."',
+    },
+    examples: {
+      marketingAction: [{ specId: 'chalkboard_offer', targetProducts: ['chips', 'cold_drinks', 'maggi'] }],
+      khataReminders: state.customers
+        .filter((customer) => customer.khataBalance > 0)
+        .slice(0, 2)
+        .map((customer) => customer.id),
+      discounts: { bananas: 15 },
+      noDiscounts: {},
     },
     validationFeedback,
   };
@@ -960,6 +1114,18 @@ function summarizeCustomers(customers: CustomerProfile[]) {
     id: customer.id,
     name: customer.name,
     segment: customer.segment,
+    groupId: customer.groupId,
+    persona: customer.persona,
+    loyaltyTier: customer.behavior?.loyaltyTier,
+    behavior: customer.behavior ? {
+      patience: customer.behavior.patience,
+      promotionAffinity: customer.behavior.promotionAffinity,
+      environmentSensitivity: customer.behavior.environmentSensitivity,
+      relationshipSensitivity: customer.behavior.relationshipSensitivity,
+      khataReliability: customer.behavior.khataReliability,
+      basketFlexibility: customer.behavior.basketFlexibility,
+      acquisitionSource: customer.behavior.acquisitionSource,
+    } : undefined,
     cadence: customer.cadence,
     visitPattern: customer.visitPattern,
     preferredWave: customer.preferredWave,
@@ -982,6 +1148,8 @@ function summarizeDayLog(log: DayLog) {
     day: log.day,
     reward: log.results.rewardBreakdown.total,
     rewardBreakdown: log.results.rewardBreakdown,
+    trustChange: log.results.trustChange,
+    trustBreakdown: log.results.trustBreakdown,
     cash: log.results.cash,
     trust: Math.round(log.results.trust),
     revenue: log.results.customerVisits.reduce((sum, visit) => sum + visit.revenue, 0),
@@ -1003,7 +1171,14 @@ function sanitizeArenaAction(raw: unknown, observation: RunObservation): PlayerA
   const action = normalizeActions({});
   action.orders = sanitizeQuantityMap(source.orders ?? source.order ?? source.purchases ?? source.purchase, 'order');
   action.removals = sanitizeQuantityMap(source.removals ?? source.remove ?? source.discards ?? source.discard, 'removal');
-  action.discounts = sanitizeDiscounts(source.discounts);
+  action.discounts = sanitizeDiscounts(
+    source.discounts
+    ?? source.discount
+    ?? source.offers
+    ?? source.offer
+    ?? source.shelfOffers
+    ?? source.offerPct
+  );
   action.khataReminders = sanitizeKhata(source.khataReminders, state.customers);
   action.marketingActions = sanitizeMarketingActions(source.marketingActions, observation.availableMarketing);
   action.cashReserve = clampInteger(source.cashReserve, 0, Math.max(0, Math.round(state.cash)), DEFAULT_CONFIG.defaultCashReserve);
@@ -1073,14 +1248,47 @@ function readProductQuantity(value: unknown, productId: ProductId, kind: 'order'
 }
 
 function sanitizeDiscounts(value: unknown): Partial<Record<ProductId, number>> {
-  const source = asRecord(value);
   const result: Partial<Record<ProductId, number>> = {};
+
+  if (Array.isArray(value)) {
+    for (const row of value) {
+      const entry = asRecord(row);
+      const productId = normalizeProductId(entry.productId ?? entry.product ?? entry.item ?? entry.sku ?? entry.id);
+      if (!productId) continue;
+      const pct = readDiscountPercent(entry, productId);
+      if (pct > 0) result[productId] = nearestDiscount(pct);
+    }
+    return result;
+  }
+
+  const source = asRecord(value);
   for (const product of PRODUCTS) {
-    const rawPct = Number(source[product.id] ?? 0);
-    if (!Number.isFinite(rawPct)) continue;
-    result[product.id] = nearestDiscount(rawPct);
+    const rawPct = source[product.id]
+      ?? source[product.name]
+      ?? source[product.name.toLowerCase()]
+      ?? source[product.name.toLowerCase().replace(/\s+/g, '_')];
+    const pct = readDiscountPercent(rawPct, product.id);
+    result[product.id] = nearestDiscount(pct);
   }
   return result;
+}
+
+function readDiscountPercent(value: unknown, productId: ProductId): number {
+  if (typeof value === 'number') return value;
+  if (typeof value === 'string') return Number(value.replace(/[^\d.-]/g, ''));
+  if (typeof value === 'boolean') return value ? 10 : 0;
+  const source = asRecord(value);
+  if (Object.keys(source).length === 0) return 0;
+  const direct = source.percent
+    ?? source.percentage
+    ?? source.pct
+    ?? source.discount
+    ?? source.discountPct
+    ?? source.offer
+    ?? source.offerPct
+    ?? source.value
+    ?? source[productId];
+  return readDiscountPercent(direct, productId);
 }
 
 function sanitizeKhata(value: unknown, customers: CustomerProfile[]): string[] {

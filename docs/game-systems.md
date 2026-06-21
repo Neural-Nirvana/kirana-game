@@ -89,6 +89,40 @@ Each customer visit can record:
 - demand reasons
 - visit probability
 
+## Customer Groups And Personas
+
+Named customers are created from customer group profiles, not hand-written as isolated one-off rows.
+
+Each group defines:
+
+- segment and default visit wave
+- base cadence and starting trust
+- usual basket
+- price sensitivity and substitution tolerance
+- weather and event affinity
+- behavior profile: patience, promotion affinity, environment sensitivity, relationship sensitivity, khata reliability, and basket flexibility
+
+Seed customers such as Mrs. Sharma, Patel Family, Cafe Uncle, School Group, Office Pantry, Hostel Boys, Evening Walkers, and Birthday Kids are generated from these group profiles with individual personas and loyalty tiers.
+
+The simulation can also acquire new named customers over time. Acquisition is affected by:
+
+- shop trust
+- active marketing
+- promoted segments and products
+- weather and event pressure
+- existing customer count
+
+This means good service and well-timed marketing can grow the repeat-customer base, while low trust makes new customer acquisition harder.
+
+Customer behavior uses these profiles during simulation:
+
+- patient customers tolerate misses longer before churning
+- promotion-sensitive customers react more to discounts and campaigns
+- environment-sensitive groups react more strongly to rain, heat, school, festival, and similar signals
+- relationship-sensitive customers respond better to loyalty and recovery actions
+- reliable khata customers repay more when reminded
+- flexible baskets shift more when trust is low or offers are active
+
 ## Inventory Ledger
 
 Each product is tracked through a day as:
@@ -155,6 +189,21 @@ Khata affects:
 
 The player can send khata reminders. Reminders can help collections, but should not be treated as free money forever.
 
+## Trust
+
+Shop trust is a reputation meter, not just a stockout counter.
+
+Daily trust now comes from four drivers:
+
+- stockout reputation damage, scaled by missed quantity and product trust impact
+- essential service bonus when high-trust essentials are fully served
+- named customer experience, based on customer-level trust deltas
+- no-stockout bonus when the store serves all demand that day
+
+Small stockouts hurt less than large stockouts, but milk and bread still matter most. A shop can recover trust by consistently serving named customers, protecting essentials, and using relationship campaigns such as Loyalty Card or Recovery Call when customers are at risk.
+
+The day result includes `trustBreakdown` so the dashboard, AI arena, and future explainability views can show why trust changed.
+
 ## Marketing
 
 Marketing campaigns are strategic demand shapers.
@@ -199,6 +248,8 @@ Marketing score range:
 ```text
 -10 to +15
 ```
+
+The relationships bucket also includes the daily shop-trust movement, so profitable play that damages long-term reputation is no longer treated as a clean win.
 
 Total score:
 

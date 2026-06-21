@@ -1,4 +1,4 @@
-import type { CustomerSegment, DayResult, MarketingEffect, MarketingPerformance, PlayerActions, ProductId, SimulationResult } from '../types';
+import type { CustomerSegment, CustomerVisit, DayResult, MarketingEffect, MarketingPerformance, PlayerActions, ProductId, SimulationResult, TrustBreakdown } from '../types';
 import { GameState } from './GameState';
 import { InventoryManager } from './InventoryManager';
 import { DemandEngine } from './DemandEngine';
@@ -13,6 +13,7 @@ import { ScoringEngine } from './scoring/ScoringEngine';
 import { DifficultyEngine } from './progression/DifficultyEngine';
 import { EventGenerator } from './progression/EventGenerator';
 import { EnvironmentContextEngine } from './progression/EnvironmentContextEngine';
+import { CustomerAcquisitionEngine } from './customers/CustomerAcquisitionEngine';
 
 export class DaySimulator {
   private demandEngine: DemandEngine;
@@ -23,6 +24,7 @@ export class DaySimulator {
   private difficultyEngine = new DifficultyEngine();
   private eventGenerator = new EventGenerator();
   private environmentContextEngine = new EnvironmentContextEngine();
+  private customerAcquisitionEngine = new CustomerAcquisitionEngine();
   private events: string[] = [];
 
   constructor(seed?: number) {
@@ -61,6 +63,17 @@ export class DaySimulator {
 
     const productResults = this.createProductResults();
     const customerVisits = [];
+    const acquiredCustomers = this.customerAcquisitionEngine.createNewCustomers({
+      day,
+      trust: state.trust,
+      weather,
+      events: this.events,
+      existingCustomers: customers,
+      marketingEffects: options.marketingEffects ?? [],
+      environmentContext,
+      random: () => this.demandEngine.nextRandom(),
+    });
+    customers.push(...acquiredCustomers);
 
     for (const wave of CUSTOMER_WAVES) {
       const plannedVisits = this.customerDemandPlanner.planWave({
@@ -95,7 +108,8 @@ export class DaySimulator {
     const totalWasteLoss = wasteLog.reduce((sum, waste) => sum + waste.cost, 0);
     const stockoutCounts = this.getStockoutCounts(productResults);
     const noStockouts = Object.keys(stockoutCounts).length === 0;
-    const trustChange = this.calculateTrustChange(stockoutCounts, noStockouts);
+    const trustBreakdown = this.calculateTrustBreakdown(productResults, customerVisits, noStockouts);
+    const trustChange = trustBreakdown.total;
     const newTrust = Math.max(0, Math.min(100, state.trust + trustChange));
     const khataAdded = customerVisits.reduce((sum, visit) => sum + visit.khataAmount, 0);
     const cashRevenue = customerVisits.reduce((sum, visit) => sum + visit.amountPaid, 0);
@@ -117,6 +131,7 @@ export class DaySimulator {
       khataCollected,
       stockoutCount: Object.keys(stockoutCounts).length,
       noStockouts,
+      trustChange,
       currentCash: state.cash,
       actions,
       customerVisits,
@@ -144,6 +159,7 @@ export class DaySimulator {
       khataCollected: Math.round(khataCollected),
       stockouts: Object.keys(stockoutCounts).length,
       trustChange,
+      trustBreakdown,
       trust: newTrust,
       cash: Math.round(newCash),
       productResults: Array.from(productResults.values()),
@@ -321,19 +337,57 @@ export class DaySimulator {
     return stockoutCounts;
   }
 
-  private calculateTrustChange(stockoutCounts: Record<string, number>, noStockouts: boolean): number {
-    let trustChange = 0;
+  private calculateTrustBreakdown(
+    productResults: Map<ProductId, SimulationResult>,
+    customerVisits: CustomerVisit[],
+    noStockouts: boolean
+  ): TrustBreakdown {
+    const notes: string[] = [];
+    let stockoutPenalty = 0;
 
-    for (const productId of Object.keys(stockoutCounts)) {
-      const penaltyKey = `${productId}_stockout` as keyof typeof TRUST_PENALTIES;
-      trustChange -= TRUST_PENALTIES[penaltyKey] ?? 0;
+    for (const result of productResults.values()) {
+      if (result.stockout <= 0) continue;
+      const product = PRODUCTS.find((item) => item.id === result.productId);
+      if (!product) continue;
+      const penaltyKey = `${result.productId}_stockout` as keyof typeof TRUST_PENALTIES;
+      const maxPenalty = TRUST_PENALTIES[penaltyKey] ?? 0;
+      if (maxPenalty <= 0) continue;
+
+      const fullPenaltyAt = Math.max(product.orderIncrement, product.baseDemand * 0.5);
+      const severity = Math.min(1, result.stockout / fullPenaltyAt);
+      const penalty = Math.max(1, Math.round(maxPenalty * severity));
+      stockoutPenalty -= penalty;
+      notes.push(`${product.name} stockout -${penalty}`);
     }
 
-    if (noStockouts) {
-      trustChange += TRUST_BONUSES.no_stockouts;
+    const highTrustProducts = PRODUCTS.filter((product) => product.trustImpact === 'high');
+    const essentialsServed = highTrustProducts.every((product) => {
+      const result = productResults.get(product.id);
+      return !result || result.stockout === 0;
+    });
+    const essentialServiceBonus = essentialsServed ? TRUST_BONUSES.essentials_available : 0;
+    if (essentialServiceBonus > 0) notes.push(`Essentials served +${essentialServiceBonus}`);
+
+    const namedCustomerTrustDelta = customerVisits
+      .filter((visit) => visit.segment !== 'walkin')
+      .reduce((sum, visit) => sum + visit.trustDelta, 0);
+    const namedCustomerEffect = Math.max(-6, Math.min(6, Math.round(namedCustomerTrustDelta / 4)));
+    if (namedCustomerEffect !== 0) {
+      notes.push(`Named customers ${namedCustomerEffect > 0 ? '+' : ''}${namedCustomerEffect}`);
     }
 
-    return trustChange;
+    const noStockoutBonus = noStockouts ? TRUST_BONUSES.no_stockouts : 0;
+    if (noStockoutBonus > 0) notes.push(`No stockouts +${noStockoutBonus}`);
+
+    const total = Math.max(-12, Math.min(8, stockoutPenalty + essentialServiceBonus + namedCustomerEffect + noStockoutBonus));
+    return {
+      stockoutPenalty,
+      essentialServiceBonus,
+      namedCustomerEffect,
+      noStockoutBonus,
+      total,
+      notes: notes.slice(0, 6),
+    };
   }
 
   private commitInventory(state: GameState, inv: InventoryManager) {

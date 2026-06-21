@@ -134,6 +134,7 @@ export class LLMDayContextClient {
       cash: result.cash,
       trust: Math.round(result.trust),
       trustChange: result.trustChange,
+      trustBreakdown: result.trustBreakdown,
       stockouts: result.stockouts,
       khataAdded: result.khataAdded,
       khataCollected: result.khataCollected,

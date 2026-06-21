@@ -97,6 +97,17 @@ For LLM arena runs:
 2. If the action is invalid, the backend sends validation feedback and gives one retry.
 3. If the retry is still invalid, the backend uses a conservative fallback action.
 
+The validator also checks action/rationale consistency. This matters because several models produced good business prose but failed to encode the executable action. The backend now rejects and retries when:
+
+- the rationale says to order items that are missing from `action.orders`
+- the rationale says to run a marketing campaign or promotion, but `action.marketingActions` is empty or missing the named campaign
+- the rationale says to send khata/payment reminders, but `action.khataReminders` is empty while customers have khata balances
+- the rationale says to discount an item, but `action.discounts` has no positive discount for that item
+
+The simulator executes the JSON only. Rationale text cannot create orders, campaigns, reminders, or discounts.
+
+Discount validation is sentence-scoped so “No shelf discounts today” does not accidentally attach later item names to a discount claim. The arena also normalizes common LLM discount formats such as `"10%"`, `{ "percent": 10 }`, or `{ "offerPct": 10 }` into numeric action values before validation.
+
 Every decision is stored in SQLite:
 
 - model
@@ -196,5 +207,9 @@ Models should optimize long-horizon store health:
 - relationships: keep repeat customers and handle khata
 - marketing: create demand only when the store can serve it
 - operations: make clean, sensible daily decisions
+
+Recent observations include `trustBreakdown`. Models should treat it as the causal explanation for shop reputation movement: stockout severity, essential service, named customer effect, and no-stockout bonus. A high-profit day can still be weak if the trust breakdown shows essential misses or named-customer damage.
+
+Customer observations also include group/persona hints where available. Use them to distinguish household essentials, office/bulk buyers, students, snack crowds, and newly acquired customers instead of treating every repeat customer the same.
 
 This means the best AI should sometimes keep cash aside instead of buying everything, and sometimes skip marketing when stock is not ready.

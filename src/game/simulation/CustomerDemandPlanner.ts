@@ -11,6 +11,7 @@ import type {
 } from '../../types';
 import { PRODUCTS } from '../../constants/products';
 import { DemandEngine } from '../DemandEngine';
+import { getCustomerGroupFor } from '../customers/CustomerModel';
 import { createProductQuantityMap } from './productMaps';
 import type { PlannedVisit } from './types';
 
@@ -129,7 +130,12 @@ export class CustomerDemandPlanner {
     const isSchoolWeek = day >= 4 && day <= 6;
     const wantsColdDrinks = customer.usualBasket.some((line) => line.productId === 'cold_drinks');
     const reasons: string[] = [];
-    const marketingLift = this.getMarketingVisitLift(customer.segment, marketingEffects);
+    const behavior = customer.behavior;
+    const group = getCustomerGroupFor(customer);
+    const marketingLift = this.applyPromotionAffinity(
+      this.getMarketingVisitLift(customer.segment, marketingEffects),
+      behavior?.promotionAffinity
+    );
     const trustRecoveryBoost = this.getTrustRecoveryBoost(customer, marketingEffects);
 
     if (trustRecoveryBoost > 0) {
@@ -149,28 +155,34 @@ export class CustomerDemandPlanner {
       cadence = Math.max(1, cadence - 1);
       reasons.push('Heat pushed cold-drink routine');
     }
+    const groupWeatherLift = this.applyEnvironmentSensitivity(group?.weatherAffinity[weather] ?? 1, behavior?.environmentSensitivity);
 
     const cadenceDue = cadence === 1 || (day + customer.visitOffset) % cadence === 0;
     if (cadenceDue) reasons.unshift('Regular cadence');
 
-    if (customer.trust < 45 && customer.failedVisits > customer.successfulVisits && trustRecoveryBoost <= 0 && marketingLift <= 1.03) {
+    const patience = behavior?.patience ?? 55;
+    const dropoutTrustThreshold = 38 + Math.round((100 - patience) * 0.1);
+    if (customer.trust < dropoutTrustThreshold && customer.failedVisits > customer.successfulVisits && trustRecoveryBoost <= 0 && marketingLift <= 1.03) {
       return { shouldVisit: false, probability: 0, reasons: ['Trust too low after repeated misses'], trustRecoveryBoost: 0 };
     }
 
     let probability = cadenceDue ? 0.92 : 0.06;
     probability *= environmentContext.segmentVisitMultipliers[customer.segment] ?? 1;
     probability *= marketingLift;
+    probability *= groupWeatherLift;
 
-    if (customer.trust >= 80) probability += 0.04;
-    else if (customer.trust < 60) probability -= 0.12;
-    if (customer.failedVisits > 0) probability -= Math.min(0.14, customer.failedVisits * 0.04);
-    if (customer.khataBalance > 600) probability -= 0.08;
+    if (customer.trust >= 80) probability += 0.03 + ((behavior?.relationshipSensitivity ?? 50) / 100) * 0.04;
+    else if (customer.trust < 60) probability -= 0.08 + ((100 - patience) / 100) * 0.08;
+    if (customer.failedVisits > 0) probability -= Math.min(0.16, customer.failedVisits * (0.03 + ((100 - patience) / 100) * 0.025));
+    if (customer.khataBalance > 600) probability -= 0.04 + ((100 - (behavior?.khataReliability ?? 55)) / 100) * 0.08;
 
     probability = Math.max(cadenceDue ? 0.48 : 0.02, Math.min(cadenceDue ? 0.98 : 0.55, probability));
 
     const environmentVisitMultiplier = environmentContext.segmentVisitMultipliers[customer.segment] ?? 1;
     if (environmentVisitMultiplier > 1.03) reasons.push('Environment lifted segment footfall');
     if (environmentVisitMultiplier < 0.97) reasons.push('Environment reduced segment footfall');
+    if (groupWeatherLift > 1.03) reasons.push(`${group?.label ?? 'Customer group'} reacted to ${weather}`);
+    if (groupWeatherLift < 0.97) reasons.push(`${group?.label ?? 'Customer group'} avoided ${weather}`);
     if (marketingLift > 1.01) reasons.push('Marketing reminded this segment');
     if (customer.trust >= 80) reasons.push('High trust');
     if (customer.trust < 60) reasons.push('Low trust drag');
@@ -206,7 +218,8 @@ export class CustomerDemandPlanner {
         reasons.push(this.productEnvironmentReason(line.productId, environmentContext));
       }
       if (customer.trust < 55 && (line.productId === 'chips' || line.productId === 'cold_drinks')) {
-        quantity *= 0.8;
+        const flexibility = customer.behavior?.basketFlexibility ?? customer.substitutionTolerance;
+        quantity *= Math.max(0.68, 0.9 - (flexibility / 100) * 0.18);
         reasons.push('Low trust reduced impulse add-ons');
       }
       if (difficulty.demandMultiplier > 1.15 && customer.segment !== 'regular') {
@@ -304,8 +317,8 @@ export class CustomerDemandPlanner {
   ): number {
     const discountPct = discounts[productId] ?? 0;
     if (discountPct <= 0) return 1;
-    const sensitivity = customer.priceSensitivity / 100;
-    return Math.min(1.3, 1 + (discountPct / 100) * sensitivity * 1.25);
+    const sensitivity = (customer.priceSensitivity * 0.7 + (customer.behavior?.promotionAffinity ?? 50) * 0.3) / 100;
+    return Math.min(1.35, 1 + (discountPct / 100) * sensitivity * 1.3);
   }
 
   private getWalkInDiscountDemandLift(
@@ -342,14 +355,25 @@ export class CustomerDemandPlanner {
   private getTrustRecoveryBoost(customer: CustomerProfile, marketingEffects: MarketingEffect[]): number {
     return marketingEffects.reduce((boost, effect) => {
       if (!effect.segments.includes(customer.segment)) return boost;
+      const relationshipLift = Math.max(0.7, Math.min(1.35, (customer.behavior?.relationshipSensitivity ?? 55) / 70));
       if (effect.specId === 'recovery_call' && customer.trust < 60 && customer.failedVisits > customer.successfulVisits) {
-        return Math.max(boost, 4);
+        return Math.max(boost, Math.round(4 * relationshipLift));
       }
       if (effect.specId === 'loyalty_card' && customer.trust < 75) {
-        return Math.max(boost, 2);
+        return Math.max(boost, Math.round(2 * relationshipLift));
       }
       return boost;
     }, 0);
+  }
+
+  private applyPromotionAffinity(lift: number, affinity = 50): number {
+    if (lift <= 1) return lift;
+    return Math.min(1.6, 1 + (lift - 1) * Math.max(0.45, affinity / 55));
+  }
+
+  private applyEnvironmentSensitivity(lift: number, sensitivity = 50): number {
+    if (lift === 1) return lift;
+    return 1 + (lift - 1) * Math.max(0.35, sensitivity / 60);
   }
 
   private productEnvironmentReason(productId: ProductId, environmentContext: EnvironmentContext): string {
