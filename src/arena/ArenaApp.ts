@@ -2,6 +2,12 @@ import { adaptAiReplay } from './arena-adapter';
 import { ArenaStage } from './ArenaStage';
 import type { AiReplayResponse, ArenaReplayDay, ArenaReplayRun } from './arena-types';
 
+import effectCustomersUrl from '../assets/arena/effect-customers.png';
+import effectKhataUrl from '../assets/arena/effect-khata.png';
+import effectWarningUrl from '../assets/arena/effect-warning.png';
+import productChipsUrl from '../assets/arena/product-chips.png';
+import productMilkUrl from '../assets/arena/product-milk.png';
+
 export class ArenaApp {
   private readonly root: HTMLElement;
   private stage?: ArenaStage;
@@ -11,6 +17,7 @@ export class ArenaApp {
   private paused = false;
   private playing = false;
   private reportOpen = false;
+  private introVisible = false;
 
   constructor(rootId: string) {
     const root = document.getElementById(rootId);
@@ -23,6 +30,10 @@ export class ArenaApp {
     this.bindEvents();
     this.stage = new ArenaStage(this.requireElement('arena-stage'));
     this.stage.mount(undefined);
+    if (shouldShowIntro()) {
+      this.showIntro();
+      return;
+    }
     await this.loadHeuristicReplay();
   }
 
@@ -65,6 +76,22 @@ export class ArenaApp {
           <div class="arena-timeline" id="arena-timeline"></div>
           <div class="arena-controls" id="arena-controls"></div>
         </section>
+        <section class="arena-intro" id="arena-intro" hidden>
+          <div class="arena-intro-card">
+            <div class="arena-intro-eyebrow">AI Arena Replay</div>
+            <h2>Can an AI run a kirana for 30 days?</h2>
+            <p>
+              Shree Shyam Bhandar is a small shop simulation where every day tests stock,
+              cash, trust, khata, perishables, weather, and marketing.
+            </p>
+            <div class="arena-intro-grid">
+              <div><strong>1. Observe</strong><span>AI reads the day, inventory, customers, and signals.</span></div>
+              <div><strong>2. Decide</strong><span>It sends one JSON plan: order, offers, marketing, reminders.</span></div>
+              <div><strong>3. Prove</strong><span>Customers arrive, items move, rewards show what actually worked.</span></div>
+            </div>
+            <button data-arena-action="start-intro" type="button">Start AI Replay</button>
+          </div>
+        </section>
         <aside class="arena-report" id="arena-report" hidden></aside>
       </main>
     `;
@@ -81,7 +108,22 @@ export class ArenaApp {
       if (action === 'report') this.toggleReport();
       if (action === 'speed') this.setSpeed(Number(target.dataset.speed ?? 5));
       if (action === 'timeline') this.selectDay(Number(target.dataset.dayIndex ?? 0));
+      if (action === 'start-intro') void this.dismissIntro();
     });
+  }
+
+  private showIntro() {
+    const intro = this.requireElement('arena-intro');
+    intro.hidden = false;
+    this.introVisible = true;
+  }
+
+  private async dismissIntro() {
+    if (!this.introVisible) return;
+    markIntroSeen();
+    this.requireElement('arena-intro').hidden = true;
+    this.introVisible = false;
+    await this.loadHeuristicReplay();
   }
 
   private renderAll() {
@@ -166,7 +208,10 @@ export class ArenaApp {
           ${day.actionCards.map((card, index) => `
             <article class="arena-action-card ${card.impact}">
               <div class="arena-action-number">${index + 1}</div>
-              <h3>${escapeHtml(card.title)}</h3>
+              <div class="arena-action-main">
+                <img src="${actionIcon(card.id)}" alt="" />
+                <h3>${escapeHtml(card.title)}</h3>
+              </div>
               <p>${escapeHtml(card.detail)}</p>
               <div class="arena-action-meta">
                 <span>Cost ${money(card.cost)}</span>
@@ -354,6 +399,14 @@ function rewardRow(label: string, value: number) {
   `;
 }
 
+function actionIcon(id: string) {
+  if (id === 'marketing') return effectCustomersUrl;
+  if (id === 'discount') return productChipsUrl;
+  if (id === 'khata') return effectKhataUrl;
+  if (id === 'waste') return effectWarningUrl;
+  return productMilkUrl;
+}
+
 function dayTone(day: ArenaReplayDay) {
   if (day.lastReward < 0) return 'bad';
   if (day.lastReward <= 6) return 'average';
@@ -381,6 +434,23 @@ function pad(value: number) {
 
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
+}
+
+function shouldShowIntro() {
+  try {
+    if (new URLSearchParams(window.location.search).get('intro') === '1') return true;
+    return window.localStorage.getItem('shree-shyam-arena-intro-seen') !== '1';
+  } catch {
+    return true;
+  }
+}
+
+function markIntroSeen() {
+  try {
+    window.localStorage.setItem('shree-shyam-arena-intro-seen', '1');
+  } catch {
+    // Non-critical: private browsing can block storage.
+  }
 }
 
 function escapeHtml(value: string) {

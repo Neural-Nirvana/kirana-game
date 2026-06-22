@@ -9,6 +9,8 @@ import type {
 } from '../types';
 
 export type ArenaReplayEventType =
+  | 'day_started'
+  | 'day_phase'
   | 'ai_scanned'
   | 'customer_entered'
   | 'demand_shown'
@@ -17,6 +19,7 @@ export type ArenaReplayEventType =
   | 'khata_written'
   | 'stockout_missed'
   | 'trust_changed'
+  | 'customer_exited'
   | 'reward_updated'
   | 'day_complete';
 
@@ -55,6 +58,7 @@ export interface ArenaReplayEvent {
   quantity?: number;
   amount?: number;
   trustDelta?: number;
+  phase?: 'morning' | 'afternoon' | 'evening';
   text?: string;
   severity?: 'good' | 'warn' | 'bad' | 'neutral';
 }

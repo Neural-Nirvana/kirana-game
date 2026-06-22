@@ -2,23 +2,26 @@ import * as Phaser from 'phaser';
 import type { ProductId } from '../types';
 import type { ArenaInventoryTile, ArenaReplayDay, ArenaReplayEvent } from './arena-types';
 
-import floorUrl from '../assets/arena/shop-floor.png';
+import stageBackdropUrl from '../assets/arena/stage-backdrop.png';
 import robotUrl from '../assets/arena/robot-shopkeeper.png';
-import kioskUrl from '../assets/arena/ai-kiosk.png';
 import customerStudentUrl from '../assets/arena/customer-student.png';
 import customerRegularUrl from '../assets/arena/customer-regular.png';
 import customerTeenUrl from '../assets/arena/customer-teen.png';
 import customerElderUrl from '../assets/arena/customer-elder.png';
 import customerFamilyUrl from '../assets/arena/customer-family.png';
-import rackGroceryUrl from '../assets/arena/rack-milk.png';
-import rackSnacksUrl from '../assets/arena/rack-snacks.png';
-import fridgeUrl from '../assets/arena/fridge.png';
-import conveyorUrl from '../assets/arena/conveyor.png';
 import effectCashUrl from '../assets/arena/effect-cash.png';
 import effectTrustUrl from '../assets/arena/effect-trust.png';
 import effectKhataUrl from '../assets/arena/effect-khata.png';
 import effectWarningUrl from '../assets/arena/effect-warning.png';
 import effectRewardUrl from '../assets/arena/effect-reward.png';
+import phaseMorningUrl from '../assets/arena/phase-morning.png';
+import phaseAfternoonUrl from '../assets/arena/phase-afternoon.png';
+import phaseEveningUrl from '../assets/arena/phase-evening.png';
+import dayStartPanelUrl from '../assets/arena/day-start-panel.png';
+import dayCompletePanelUrl from '../assets/arena/day-complete-panel.png';
+import customerJholaFullUrl from '../assets/arena/customer-jhola-full.png';
+import scoreBurstGoodUrl from '../assets/arena/score-burst-good.png';
+import scoreBurstBadUrl from '../assets/arena/score-burst-bad.png';
 
 import milkUrl from '../assets/arena/product-milk.png';
 import breadUrl from '../assets/arena/product-bread.png';
@@ -47,21 +50,21 @@ const productUrls: Record<ProductId, string> = {
 };
 
 const productPositions: Record<ProductId, { x: number; y: number }> = {
-  milk: { x: 840, y: 100 },
-  bread: { x: 950, y: 100 },
-  maggi: { x: 1060, y: 100 },
-  chips: { x: 840, y: 178 },
-  cold_drinks: { x: 1204, y: 176 },
-  bananas: { x: 1052, y: 278 },
-  eggs: { x: 1168, y: 278 },
+  milk: { x: 1060, y: 126 },
+  bread: { x: 1206, y: 128 },
+  maggi: { x: 1348, y: 122 },
+  chips: { x: 1358, y: 186 },
+  cold_drinks: { x: 1498, y: 172 },
+  bananas: { x: 1426, y: 308 },
+  eggs: { x: 1514, y: 308 },
 };
 
 const customerPositions = [
-  { x: 102, y: 252 },
-  { x: 190, y: 252 },
-  { x: 278, y: 252 },
-  { x: 366, y: 252 },
-  { x: 454, y: 252 },
+  { x: 248, y: 272 },
+  { x: 336, y: 272 },
+  { x: 424, y: 272 },
+  { x: 512, y: 272 },
+  { x: 600, y: 272 },
 ];
 
 export class ArenaStage {
@@ -79,8 +82,8 @@ export class ArenaStage {
     this.game = new Phaser.Game({
       type: Phaser.AUTO,
       parent: this.container,
-      width: 1280,
-      height: 360,
+      width: 1600,
+      height: 390,
       backgroundColor: '#130d0a',
       scene: this.scene,
       scale: {
@@ -116,8 +119,9 @@ export class ArenaStage {
 class ArenaReplayScene extends Phaser.Scene {
   private day?: ArenaReplayDay;
   private modelLabel?: Phaser.GameObjects.Text;
-  private speechText?: Phaser.GameObjects.Text;
+  private phaseOverlay?: Phaser.GameObjects.Image;
   private customerSprites: Phaser.GameObjects.Image[] = [];
+  private activeCustomerSprites = new Map<number, Phaser.GameObjects.Image>();
   private staticObjects: Phaser.GameObjects.GameObject[] = [];
   private dayObjects: Phaser.GameObjects.GameObject[] = [];
   private transientObjects: Phaser.GameObjects.GameObject[] = [];
@@ -130,18 +134,21 @@ class ArenaReplayScene extends Phaser.Scene {
   }
 
   preload() {
-    this.load.image('floor', floorUrl);
+    this.load.image('stage-backdrop', stageBackdropUrl);
     this.load.image('robot', robotUrl);
-    this.load.image('kiosk', kioskUrl);
-    this.load.image('rack-grocery', rackGroceryUrl);
-    this.load.image('rack-snacks', rackSnacksUrl);
-    this.load.image('fridge', fridgeUrl);
-    this.load.image('conveyor', conveyorUrl);
     this.load.image('effect-cash', effectCashUrl);
     this.load.image('effect-trust', effectTrustUrl);
     this.load.image('effect-khata', effectKhataUrl);
     this.load.image('effect-warning', effectWarningUrl);
     this.load.image('effect-reward', effectRewardUrl);
+    this.load.image('phase-morning', phaseMorningUrl);
+    this.load.image('phase-afternoon', phaseAfternoonUrl);
+    this.load.image('phase-evening', phaseEveningUrl);
+    this.load.image('day-start-panel', dayStartPanelUrl);
+    this.load.image('day-complete-panel', dayCompletePanelUrl);
+    this.load.image('customer-jhola-full', customerJholaFullUrl);
+    this.load.image('score-burst-good', scoreBurstGoodUrl);
+    this.load.image('score-burst-bad', scoreBurstBadUrl);
     customerUrls.forEach((url, index) => this.load.image(`customer-${index}`, url));
     Object.entries(productUrls).forEach(([productId, url]) => this.load.image(productKey(productId as ProductId), url));
   }
@@ -174,7 +181,6 @@ class ArenaReplayScene extends Phaser.Scene {
     this.setPaused(false);
     this.setDay(day);
     this.clearTransient();
-    this.say(`Scanning ${day.weather.toLowerCase()} demand...`);
 
     const events = [...day.events].sort((a, b) => a.at - b.at);
     let previousAt = 0;
@@ -190,40 +196,22 @@ class ArenaReplayScene extends Phaser.Scene {
   private drawStaticStage() {
     this.staticObjects.forEach((object) => object.destroy());
     this.staticObjects = [];
-    this.addStatic(this.add.image(640, 180, 'floor').setDisplaySize(1280, 360));
-    this.addPanel(18, 12, 430, 330, '#0b2239', '#38bdf8');
-    this.addPanel(470, 12, 300, 330, '#291043', '#a855f7');
-    this.addPanel(790, 12, 472, 330, '#15321f', '#22c55e');
-    this.addZoneLabel(60, 24, '1  CUSTOMER QUEUE', '#38bdf8');
-    this.addZoneLabel(520, 24, '2  AI KIOSK', '#a855f7');
-    this.addZoneLabel(900, 24, '3  RACKS + CONVEYOR', '#22c55e');
-    this.addStatic(this.add.image(615, 230, 'kiosk').setDisplaySize(292, 188));
-    this.addStatic(this.add.image(640, 176, 'robot').setDisplaySize(208, 234));
-    this.addStatic(this.add.image(890, 142, 'rack-grocery').setDisplaySize(238, 198));
-    this.addStatic(this.add.image(1088, 142, 'rack-snacks').setDisplaySize(238, 198));
-    this.addStatic(this.add.image(1203, 176, 'fridge').setDisplaySize(118, 220));
-    this.addStatic(this.add.image(1010, 310, 'conveyor').setDisplaySize(410, 112));
-    this.addStatic(this.add.text(600, 286, 'KHATA', arenaText(18, '#fde68a')).setOrigin(0.5));
-    this.addStatic(this.add.text(662, 310, 'PAYTM', arenaText(15, '#86efac')).setOrigin(0.5));
-    this.modelLabel = this.add.text(640, 218, '', {
-      ...arenaText(16, '#fef08a'),
+    this.addStatic(this.add.image(800, 195, 'stage-backdrop').setDisplaySize(1600, 390));
+    this.phaseOverlay = this.add.image(800, 195, 'phase-morning').setDisplaySize(1600, 390).setAlpha(0.2);
+    this.addStatic(this.phaseOverlay);
+    this.addStatic(this.add.image(800, 205, 'robot').setDisplaySize(190, 228));
+    this.modelLabel = this.add.text(800, 244, '', {
+      ...arenaText(13, '#fef08a'),
       align: 'center',
     }).setOrigin(0.5);
     this.addStatic(this.modelLabel);
-    this.speechText = this.add.text(640, 70, 'Ready', {
-      ...arenaText(18, '#0f172a'),
-      backgroundColor: '#fff7ed',
-      padding: { x: 12, y: 8 },
-      align: 'center',
-    }).setOrigin(0.5);
-    this.addStatic(this.speechText);
   }
 
   private renderDayState(day: ArenaReplayDay) {
     this.clearDayObjects();
     this.clearTransient();
-    this.modelLabel?.setText(`MODEL:\n${shortModelLabel(day.model)}`);
-    this.say(day.validationStatus === 'valid' ? 'Action valid. Ready to replay.' : 'Fallback action selected.');
+    this.modelLabel?.setText(shortModelLabel(day.model));
+    this.phaseOverlay?.setTexture('phase-morning').setAlpha(0.2);
     this.renderCustomers(day);
     this.renderInventory(day.inventory);
     this.renderWarnings(day);
@@ -231,19 +219,10 @@ class ArenaReplayScene extends Phaser.Scene {
 
   private renderCustomers(day: ArenaReplayDay) {
     this.customerSprites = [];
-    day.visits.slice(0, 5).forEach((visit, index) => {
-      const position = customerPositions[index];
-      const sprite = this.add.image(position.x, position.y, `customer-${index % customerUrls.length}`).setDisplaySize(82, 136);
-      sprite.setAlpha(0.92);
-      this.customerSprites.push(sprite);
-      this.addDay(sprite);
-      this.addDay(this.add.text(position.x, position.y + 84, `${index + 1}`, arenaText(16, '#f8fafc')).setOrigin(0.5));
-      this.addDay(this.add.rectangle(position.x, position.y + 66, 52, 8, 0x334155, 0.9));
-      this.addDay(this.add.rectangle(position.x - 14, position.y + 66, 24, 8, statusColor(visit.outcome), 1));
-    });
+    this.activeCustomerSprites.clear();
 
     if (day.visits.length === 0) {
-      this.addDay(this.add.text(224, 196, 'No customer visits recorded', arenaText(22, '#e2e8f0')).setOrigin(0.5));
+      this.popup('No customer visits', 240, 210, 'neutral');
     }
   }
 
@@ -251,32 +230,35 @@ class ArenaReplayScene extends Phaser.Scene {
     inventory.forEach((tile) => {
       const position = productPositions[tile.productId];
       if (!position) return;
-      const fillPct = Math.min(1, tile.closing / Math.max(1, tile.openingShelf || tile.ordered || tile.sold || 1));
-      this.addDay(this.add.image(position.x, position.y - 12, productKey(tile.productId)).setDisplaySize(42, 42));
-      this.addDay(this.add.text(position.x, position.y + 20, tile.name, arenaText(12, '#f8fafc')).setOrigin(0.5));
-      this.addDay(this.add.text(position.x, position.y + 40, `${tile.closing} ${unitShort(tile.unit)}`, arenaText(17, '#fef3c7')).setOrigin(0.5));
-      this.addDay(this.add.rectangle(position.x, position.y + 58, 70, 10, 0x1f2937, 0.94));
-      this.addDay(this.add.rectangle(position.x - 35 + 35 * fillPct, position.y + 58, 70 * fillPct, 10, statusColor(tile.status), 1));
+      if (tile.status === 'stockout') {
+        this.addDay(this.add.image(position.x + 30, position.y - 24, 'effect-warning').setDisplaySize(30, 30));
+      } else if (tile.status === 'low') {
+        this.addDay(this.add.circle(position.x + 32, position.y - 24, 9, 0xf59e0b, 0.92));
+      }
     });
   }
 
   private renderWarnings(day: ArenaReplayDay) {
     const misses = day.inventory.filter((tile) => tile.status === 'stockout');
     if (misses.length > 0) {
-      this.addDay(this.add.image(1220, 52, 'effect-warning').setDisplaySize(40, 40));
-      this.addDay(this.add.text(1182, 86, 'LOW\nSTOCK', arenaText(18, '#fef08a')).setAlign('center').setOrigin(0.5));
+      this.addDay(this.add.image(1550, 54, 'effect-warning').setDisplaySize(48, 48));
     }
   }
 
   private async handleEvent(event: ArenaReplayEvent, speed: number, token: number) {
     switch (event.type) {
+      case 'day_started':
+        this.showDayStart();
+        break;
+      case 'day_phase':
+        this.setPhase(event.phase ?? 'morning', event.text ?? 'Day phase');
+        break;
       case 'ai_scanned':
-        this.say(event.text ?? 'Scanning demand...');
         this.flashRobot();
+        this.popup('Scanning', 800, 86, 'neutral');
         break;
       case 'customer_entered':
-        this.highlightCustomer(event.customerIndex ?? 0);
-        this.popup(event.text ?? 'Customer', 230, 82, event.severity ?? 'neutral');
+        await this.enterCustomer(event, speed, token);
         break;
       case 'demand_shown':
         this.demandBubble(event.customerIndex ?? 0, event.text ?? 'Demand', event.severity ?? 'neutral');
@@ -285,25 +267,144 @@ class ArenaReplayScene extends Phaser.Scene {
         await this.conveyItem(event, speed, token);
         break;
       case 'sale_paid':
-        this.effectPopup('effect-cash', event.text ?? 'Paid', 690, 308, 'good');
+        this.effectPopup('effect-cash', event.text ?? 'Paid', 858, 318, 'good');
         break;
       case 'khata_written':
-        this.effectPopup('effect-khata', `Khata ${event.text ?? ''}`, 604, 314, 'warn');
+        this.effectPopup('effect-khata', `Khata ${event.text ?? ''}`, 740, 320, 'warn');
         break;
       case 'stockout_missed':
-        this.effectPopup('effect-warning', event.text ?? 'Missed', 224, 130, 'bad');
+        this.effectPopup('effect-warning', event.text ?? 'Missed', 374, 130, 'bad');
         break;
       case 'trust_changed':
-        this.effectPopup('effect-trust', event.text ?? 'Trust changed', 552, 90, event.severity ?? 'neutral');
+        this.effectPopup('effect-trust', event.text ?? 'Trust changed', 690, 92, event.severity ?? 'neutral');
+        break;
+      case 'customer_exited':
+        await this.exitCustomer(event, speed, token);
         break;
       case 'reward_updated':
-        this.effectPopup('effect-reward', event.text ?? 'Reward', 640, 112, event.severity ?? 'neutral');
+        this.effectPopup('effect-reward', event.text ?? 'Reward', 800, 106, event.severity ?? 'neutral');
         break;
       case 'day_complete':
-        this.say(event.text ?? 'Day complete');
-        this.popup('DAY COMPLETE', 640, 326, event.severity ?? 'neutral');
+        this.showDayComplete(event);
         break;
     }
+  }
+
+  private showDayStart() {
+    if (!this.day) return;
+    const panel = this.add.container(800, 194).setAlpha(0).setDepth(60);
+    this.addCeremonyBacking(panel);
+    panel.add(this.add.image(0, 0, 'day-start-panel').setDisplaySize(680, 188).setAlpha(0.55));
+    panel.add(this.add.text(0, -44, `DAY ${this.day.day.toString().padStart(2, '0')} BEGINS`, ceremonyText(30, '#ffffff')).setOrigin(0.5));
+    panel.add(this.add.text(0, -4, `${this.day.weather} · ${this.day.eventLabel}`, ceremonyText(18, '#dff6ff')).setOrigin(0.5));
+    panel.add(this.add.text(0, 36, 'AI reads signals, plans stock, then customers arrive.', ceremonyText(15, '#fff3b0')).setOrigin(0.5));
+    this.transientObjects.push(panel);
+    this.tweens.add({
+      targets: panel,
+      alpha: 1,
+      y: 186,
+      duration: 260,
+      ease: 'Sine.easeOut',
+    });
+    this.time.delayedCall(1150, () => {
+      if (!panel.active) return;
+      this.tweens.add({
+        targets: panel,
+        alpha: 0,
+        y: 176,
+        duration: 220,
+        ease: 'Sine.easeIn',
+        onComplete: () => panel.destroy(),
+      });
+    });
+  }
+
+  private showDayComplete(event: ArenaReplayEvent) {
+    if (!this.day) return;
+    const good = (event.severity ?? 'neutral') !== 'bad' && this.day.lastReward >= 0;
+    const panel = this.add.container(800, 194).setAlpha(0).setDepth(60);
+    this.addCeremonyBacking(panel);
+    panel.add(this.add.image(0, 0, 'day-complete-panel').setDisplaySize(680, 188).setAlpha(0.55));
+    panel.add(this.add.image(-250, -6, good ? 'score-burst-good' : 'score-burst-bad').setDisplaySize(112, 112));
+    panel.add(this.add.text(0, -48, 'DAY COMPLETE', ceremonyText(30, '#ffffff')).setOrigin(0.5));
+    panel.add(this.add.text(0, -6, `Reward ${signedNumber(this.day.lastReward)} · Profit ${moneyText(this.day.metrics.profit)}`, ceremonyText(20, good ? '#b7ffc8' : '#ffc4c4')).setOrigin(0.5));
+    panel.add(this.add.text(0, 36, `${this.day.metrics.visits} visits · ${this.day.metrics.soldUnits} sold · ${this.day.metrics.missedUnits} missed`, ceremonyText(15, '#dbeafe')).setOrigin(0.5));
+    this.transientObjects.push(panel);
+    this.tweens.add({
+      targets: panel,
+      alpha: 1,
+      scale: 1.03,
+      duration: 320,
+      ease: 'Back.easeOut',
+    });
+    this.time.delayedCall(3400, () => {
+      if (!panel.active) return;
+      this.tweens.add({
+        targets: panel,
+        alpha: 0,
+        scale: 0.98,
+        duration: 260,
+        ease: 'Sine.easeIn',
+        onComplete: () => panel.destroy(),
+      });
+    });
+  }
+
+  private addCeremonyBacking(panel: Phaser.GameObjects.Container) {
+    panel.add(this.add.rectangle(0, 0, 724, 214, 0x020817, 0.92)
+      .setStrokeStyle(3, 0xf5c451, 0.72));
+    panel.add(this.add.rectangle(0, 0, 686, 170, 0x07182b, 0.88)
+      .setStrokeStyle(1, 0x38bdf8, 0.45));
+  }
+
+  private setPhase(phase: NonNullable<ArenaReplayEvent['phase']>, label: string) {
+    if (!this.phaseOverlay) return;
+    this.phaseOverlay.setTexture(`phase-${phase}`);
+    this.tweens.add({
+      targets: this.phaseOverlay,
+      alpha: phase === 'evening' ? 0.42 : phase === 'afternoon' ? 0.25 : 0.2,
+      duration: 460,
+      ease: 'Sine.easeInOut',
+    });
+    const x = phase === 'morning' ? 308 : phase === 'afternoon' ? 800 : 1290;
+    this.popup(label, x, 88, 'neutral');
+  }
+
+  private async enterCustomer(event: ArenaReplayEvent, speed: number, token: number) {
+    const index = event.customerIndex ?? 0;
+    const position = this.customerPositionForIndex(index);
+    this.activeCustomerSprites.get(index)?.destroy();
+    const sprite = this.add.image(124, position.y + 10, `customer-${index % customerUrls.length}`).setDisplaySize(82, 136).setAlpha(0);
+    this.customerSprites.push(sprite);
+    this.activeCustomerSprites.set(index, sprite);
+    this.addDay(sprite);
+    const divisor = animationDivisor(speed);
+    await this.tween(sprite, { x: position.x, y: position.y, alpha: 0.94 }, 420 / divisor, token);
+    this.highlightCustomer(index);
+    this.popup(event.customerName ?? 'Customer', position.x, 92, event.severity ?? 'neutral');
+  }
+
+  private async exitCustomer(event: ArenaReplayEvent, speed: number, token: number) {
+    const index = event.customerIndex ?? 0;
+    const sprite = this.activeCustomerSprites.get(index);
+    if (!sprite) return;
+
+    const exitTargets: Phaser.GameObjects.GameObject[] = [sprite];
+    let bag: Phaser.GameObjects.Image | undefined;
+    if (event.severity === 'good' || event.severity === 'warn') {
+      bag = this.add.image(sprite.x + 34, sprite.y + 48, 'customer-jhola-full').setDisplaySize(42, 42).setAlpha(0.96);
+      this.transientObjects.push(bag);
+      exitTargets.push(bag);
+      this.popup(event.text ?? 'Bag filled', sprite.x, sprite.y - 92, event.severity ?? 'good');
+    } else {
+      this.effectPopup('effect-warning', event.text ?? 'Missed', sprite.x + 10, sprite.y - 92, 'bad');
+    }
+
+    const divisor = animationDivisor(speed);
+    await this.tween(exitTargets, { x: 86, alpha: 0 }, 520 / divisor, token);
+    sprite.destroy();
+    bag?.destroy();
+    this.activeCustomerSprites.delete(index);
   }
 
   private async conveyItem(event: ArenaReplayEvent, speed: number, token: number) {
@@ -311,30 +412,50 @@ class ArenaReplayScene extends Phaser.Scene {
     const start = productPositions[event.productId] ?? { x: 1040, y: 220 };
     const item = this.add.image(start.x, start.y, productKey(event.productId)).setDisplaySize(48, 48);
     this.transientObjects.push(item);
-    await this.tween(item, { x: 650, y: 310, angle: 12 }, 680 / speed, token);
-    this.popup(event.text ?? 'Served', 650, 268, 'good');
-    await this.wait(140 / speed, token);
+    const divisor = animationDivisor(speed);
+    await this.tween(item, { x: 1220, y: 302, angle: 8 }, 420 / divisor, token);
+    await this.tween(item, { x: 852, y: 318, angle: -8 }, 660 / divisor, token);
+    this.popup(event.text ?? 'Served', 824, 286, 'good');
+    await this.wait(160 / divisor, token);
     item.destroy();
   }
 
   private highlightCustomer(index: number) {
-    this.customerSprites.forEach((sprite, customerIndex) => {
-      sprite.setScale(customerIndex === index ? 0.53 : 0.46);
+    this.activeCustomerSprites.forEach((sprite, customerIndex) => {
+      const active = customerIndex === index;
+      const position = this.customerPositionForIndex(customerIndex);
+      sprite.setDisplaySize(active ? 104 : 90, active ? 172 : 150);
       sprite.setAlpha(customerIndex === index ? 1 : 0.78);
+      if (position) {
+        this.tweens.add({
+          targets: sprite,
+          x: active ? position.x + 10 : position.x,
+          y: active ? position.y - 8 : position.y,
+          duration: 220,
+          ease: 'Sine.easeOut',
+        });
+      }
     });
   }
 
   private demandBubble(index: number, text: string, severity: ArenaReplayEvent['severity']) {
-    const position = customerPositions[Math.min(index, customerPositions.length - 1)] ?? customerPositions[0];
-    const bubble = this.add.container(position.x, position.y - 122);
-    const width = Math.max(96, Math.min(170, text.length * 6));
-    const background = this.add.rectangle(0, 0, width, 54, 0xfffbeb, 0.97).setStrokeStyle(2, statusColor(severity ?? 'neutral'));
-    const label = this.add.text(0, 0, text, {
-      ...arenaText(13, '#111827'),
-      align: 'center',
-      wordWrap: { width: width - 14 },
-    }).setOrigin(0.5);
-    bubble.add([background, label]);
+    const sprite = this.activeCustomerSprites.get(index);
+    const position = sprite ? { x: sprite.x, y: sprite.y } : this.customerPositionForIndex(index);
+    const visit = this.day?.visits[index];
+    const lines = visit?.requested.slice(0, 4) ?? [];
+    const bubble = this.add.container(position.x, position.y - 126);
+    const width = Math.max(74, lines.length * 48 + 20);
+    const background = this.add.rectangle(0, 0, width, 60, 0xfffbeb, 0.98).setStrokeStyle(2, statusColor(severity ?? 'neutral'));
+    bubble.add(background);
+    if (lines.length === 0) {
+      bubble.add(this.add.text(0, 0, text, arenaText(13, '#111827')).setOrigin(0.5));
+    } else {
+      lines.forEach((line, lineIndex) => {
+        const x = -width / 2 + 26 + lineIndex * 48;
+        bubble.add(this.add.image(x, -4, productKey(line.productId)).setDisplaySize(32, 32));
+        bubble.add(this.add.text(x + 14, 16, `${line.quantity}`, arenaText(13, '#111827')).setOrigin(0.5));
+      });
+    }
     this.transientObjects.push(bubble);
     this.tweens.add({
       targets: bubble,
@@ -348,9 +469,9 @@ class ArenaReplayScene extends Phaser.Scene {
 
   private popup(text: string, x: number, y: number, severity: ArenaReplayEvent['severity']) {
     const label = this.add.text(x, y, text, {
-      ...arenaText(22, popupColor(severity)),
-      backgroundColor: '#020617',
-      padding: { x: 12, y: 8 },
+      ...arenaText(18, popupColor(severity)),
+      backgroundColor: 'rgba(2,6,23,0.82)',
+      padding: { x: 10, y: 7 },
     }).setOrigin(0.5);
     this.transientObjects.push(label);
     this.tweens.add({
@@ -363,10 +484,10 @@ class ArenaReplayScene extends Phaser.Scene {
   }
 
   private effectPopup(iconKey: string, text: string, x: number, y: number, severity: ArenaReplayEvent['severity']) {
-    const icon = this.add.image(x - 54, y, iconKey).setDisplaySize(34, 34);
+    const icon = this.add.image(x - 44, y, iconKey).setDisplaySize(32, 32);
     const label = this.add.text(x, y, text, {
-      ...arenaText(18, popupColor(severity)),
-      backgroundColor: '#06111f',
+      ...arenaText(16, popupColor(severity)),
+      backgroundColor: 'rgba(6,17,31,0.86)',
       padding: { x: 10, y: 7 },
     }).setOrigin(0, 0.5);
     this.transientObjects.push(icon, label);
@@ -383,7 +504,7 @@ class ArenaReplayScene extends Phaser.Scene {
   }
 
   private flashRobot() {
-    const glow = this.add.circle(640, 176, 96, 0x38bdf8, 0.18);
+    const glow = this.add.circle(800, 200, 106, 0x38bdf8, 0.16);
     this.transientObjects.push(glow);
     this.tweens.add({
       targets: glow,
@@ -394,47 +515,28 @@ class ArenaReplayScene extends Phaser.Scene {
     });
   }
 
-  private say(text: string) {
-    this.speechText?.setText(text);
-  }
-
-  private addPanel(x: number, y: number, w: number, h: number, fill: string, stroke: string) {
-    const panel = this.add.graphics();
-    panel.fillStyle(Number.parseInt(fill.slice(1), 16), 0.56);
-    panel.fillRoundedRect(x, y, w, h, 16);
-    panel.lineStyle(2, Number.parseInt(stroke.slice(1), 16), 0.85);
-    panel.strokeRoundedRect(x, y, w, h, 16);
-    this.addStatic(panel);
-  }
-
-  private addZoneLabel(x: number, y: number, text: string, color: string) {
-    const label = this.add.text(x, y, text, {
-      ...arenaText(22, '#ffffff'),
-      backgroundColor: '#0f172a',
-      padding: { x: 14, y: 8 },
-    });
-    label.setStroke(color, 4);
-    this.addStatic(label);
-  }
-
   private async tween(
-    target: Phaser.GameObjects.GameObject,
-    props: { x?: number; y?: number; angle?: number },
+    target: Phaser.GameObjects.GameObject | Phaser.GameObjects.GameObject[],
+    props: { x?: number; y?: number; angle?: number; alpha?: number; scale?: number },
     duration: number,
     token: number
   ) {
+    const tweenProps = Object.fromEntries(
+      Object.entries(props).filter(([, value]) => value !== undefined)
+    ) as typeof props;
     await new Promise<void>((resolve) => {
       this.tweens.add({
         targets: target,
-        x: props.x,
-        y: props.y,
-        angle: props.angle,
+        ...tweenProps,
         ease: 'Cubic.easeInOut',
         duration,
         onComplete: () => resolve(),
       });
     });
-    if (this.replayToken !== token) target.destroy();
+    if (this.replayToken !== token) {
+      const targets = Array.isArray(target) ? target : [target];
+      targets.forEach((item) => item.destroy());
+    }
   }
 
   private async wait(ms: number, token: number) {
@@ -460,11 +562,17 @@ class ArenaReplayScene extends Phaser.Scene {
     this.dayObjects.forEach((object) => object.destroy());
     this.dayObjects = [];
     this.customerSprites = [];
+    this.activeCustomerSprites.clear();
   }
 
   private clearTransient() {
     this.transientObjects.forEach((object) => object.destroy());
     this.transientObjects = [];
+  }
+
+  private customerPositionForIndex(index: number) {
+    const slot = customerPositions.length - 1 - (index % customerPositions.length);
+    return customerPositions[slot] ?? customerPositions[customerPositions.length - 1];
   }
 }
 
@@ -478,6 +586,22 @@ function arenaText(size: number, color: string): Phaser.Types.GameObjects.Text.T
     fontSize: `${size}px`,
     fontStyle: '700',
     color,
+  };
+}
+
+function ceremonyText(size: number, color: string): Phaser.Types.GameObjects.Text.TextStyle {
+  return {
+    ...arenaText(size, color),
+    stroke: '#020617',
+    strokeThickness: Math.max(4, Math.round(size / 6)),
+    shadow: {
+      offsetX: 0,
+      offsetY: 3,
+      color: '#000000',
+      blur: 4,
+      stroke: true,
+      fill: true,
+    },
   };
 }
 
@@ -500,13 +624,16 @@ function shortModelLabel(model: string) {
   return lastPart.replace(/-/g, ' ').slice(0, 16).toUpperCase();
 }
 
-function unitShort(unit: string) {
-  const map: Record<string, string> = {
-    bottles: 'bt',
-    packets: 'pk',
-    packs: 'pk',
-  };
-  return map[unit] ?? unit;
+function animationDivisor(speed: number) {
+  return Math.max(1, Math.sqrt(speed));
+}
+
+function signedNumber(value: number) {
+  return `${value >= 0 ? '+' : ''}${Math.round(value)}`;
+}
+
+function moneyText(value: number) {
+  return `₹${Math.round(value).toLocaleString('en-IN')}`;
 }
 
 function sleep(ms: number) {

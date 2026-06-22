@@ -255,27 +255,82 @@ function buildThoughts(
 }
 
 function buildReplayEvents(log: DayLog, metrics: ArenaDayMetrics): ArenaReplayEvent[] {
+  const visibleVisits = log.results.customerVisits.slice(0, 12);
   const events: ArenaReplayEvent[] = [
     {
-      type: 'ai_scanned',
+      type: 'day_started',
       at: 0,
+      text: `Day ${log.day}`,
+      severity: 'neutral',
+    },
+    {
+      type: 'day_phase',
+      at: 120,
+      phase: 'morning',
+      text: 'Morning rush',
+      severity: 'neutral',
+    },
+    {
+      type: 'ai_scanned',
+      at: 320,
       text: `Scanning ${formatWeather(log.results.environmentContext.weather)} demand and opening shelf stock`,
       severity: 'neutral',
     },
   ];
-  let at = 420;
+  let at = 760;
+  const afternoonIndex = Math.max(1, Math.floor(visibleVisits.length / 3));
+  const eveningIndex = Math.max(2, Math.floor((visibleVisits.length * 2) / 3));
+  const usedPhases = new Set<ArenaReplayEvent['phase']>(['morning']);
+  const arrived = new Set<number>();
 
-  for (const [index, visit] of log.results.customerVisits.slice(0, 8).entries()) {
+  const pushArrival = (index: number, arrivalAt: number) => {
+    const visit = visibleVisits[index];
+    if (!visit || arrived.has(index)) return;
+    arrived.add(index);
     events.push({
       type: 'customer_entered',
-      at,
+      at: arrivalAt,
       customerIndex: index,
       customerName: visit.customerName,
       segment: visit.segment,
       text: visit.customerName,
       severity: 'neutral',
     });
-    at += 360;
+  };
+
+  const openingQueue = Math.min(5, visibleVisits.length);
+  for (let index = 0; index < openingQueue; index += 1) {
+    pushArrival(index, at + index * 220);
+  }
+  at += openingQueue * 220 + 460;
+
+  for (const [index, visit] of visibleVisits.entries()) {
+    if (index === afternoonIndex && !usedPhases.has('afternoon')) {
+      events.push({
+        type: 'day_phase',
+        at,
+        phase: 'afternoon',
+        text: 'Afternoon counter',
+        severity: 'neutral',
+      });
+      usedPhases.add('afternoon');
+      at += 280;
+    }
+
+    if (index === eveningIndex && !usedPhases.has('evening')) {
+      events.push({
+        type: 'day_phase',
+        at,
+        phase: 'evening',
+        text: 'Evening close',
+        severity: 'neutral',
+      });
+      usedPhases.add('evening');
+      at += 280;
+    }
+
+    pushArrival(index, Math.max(760, at - 460));
+
     events.push({
       type: 'demand_shown',
       at,
@@ -350,7 +405,18 @@ function buildReplayEvents(log: DayLog, metrics: ArenaDayMetrics): ArenaReplayEv
       });
     }
 
-    at += 200;
+    at += 260;
+    events.push({
+      type: 'customer_exited',
+      at,
+      customerIndex: index,
+      customerName: visit.customerName,
+      text: visit.outcome === 'fulfilled' ? 'Bag filled' : visit.outcome === 'partial' ? 'Partial bag' : 'Left unhappy',
+      severity: visit.outcome === 'fulfilled' ? 'good' : visit.outcome === 'partial' ? 'warn' : 'bad',
+    });
+
+    pushArrival(index + 5, at + 140);
+    at += 180;
   }
 
   events.push({
