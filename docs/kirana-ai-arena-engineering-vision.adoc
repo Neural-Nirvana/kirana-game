@@ -1,0 +1,1154 @@
+= Shree Shyam Bhandar: AI Arena Engineering and Vision
+:toc:
+:toclevels: 3
+:sectnums:
+:source-highlighter: rouge
+
+== Purpose
+
+This document is a standalone engineering and product context for Shree Shyam Bhandar, a 30-day Indian kirana shop simulation, and its AI Arena.
+
+It is written for readers who have not seen the codebase or the earlier planning notes. It explains:
+
+* what the game is trying to teach
+* how the simulation works
+* how AI agents play the game
+* how a single AI day should be recorded and replayed
+* which state variables exist
+* how the backend stores runs and outcomes
+* how a future AI replay frontend should present model behavior
+
+== Product Vision
+
+Shree Shyam Bhandar is a shopkeeping simulation about disciplined daily decision-making.
+
+The player, human or AI, runs a small kirana store for 30 days. Every day the shopkeeper must read local signals, stock inventory, manage perishables, follow up khata, decide whether to run marketing, and learn from yesterday's demand.
+
+The central question is:
+
+[quote]
+Can the shopkeeper make money without losing customer trust?
+
+The game should not feel like a spreadsheet optimizer. It should feel like a readable business simulation where local context matters:
+
+* Monday household essentials
+* hot days lifting cold-drink demand
+* rain changing walk-ins
+* school days affecting students
+* festival windows changing family and snack demand
+* khata delaying usable cash
+* marketing creating demand that can either be served or missed
+* trust compounding over repeat customer experiences
+
+== Game Loop
+
+One run is a 30-day episode.
+
+Each day follows this loop:
+
+[source,text]
+----
+Read environment and customer signals
+  -> inspect inventory and cash
+  -> choose orders, removals, discounts, khata reminders, marketing
+  -> open the shop
+  -> simulate customer visits and fulfillment
+  -> calculate money, trust, waste, marketing, and reward
+  -> persist state
+  -> plan the next day
+----
+
+For AI Arena:
+
+* 1 episode = 1 full 30-day run
+* 1 step = 1 in-game day
+* 1 action JSON = one shopkeeper plan before the day opens
+* 1 reward = the score earned after that day is simulated
+
+== Starting Conditions
+
+[cols="1,1", options="header"]
+|===
+| Setting | Value
+
+| Run length | 30 days
+| Starting cash | Rs 3,000
+| Starting trust | 70
+| Default cash reserve | Rs 600
+| Fridge capacity | 100 units
+| Shelf capacity | 200 units
+| Shop size | 300 sq ft
+|===
+
+The shop starts with empty shelves. The first meaningful decision is opening stock.
+
+== Product Model
+
+The first playable SKU set:
+
+[cols="1,1,1,1,1,1", options="header"]
+|===
+| Item | Base Demand | Variance | Order Increment | Trust Impact | Perishability
+
+| Milk | 36 | 8 | 5 | High | 1.00
+| Bread | 18 | 4 | 5 | High | 0.78
+| Eggs | 12 | 3 | 12 | Medium | 0.35
+| Maggi | 20 | 5 | 10 | Low | 0.00
+| Chips | 15 | 5 | 10 | Low | 0.00
+| Cold Drinks | 12 | 4 | 6 | Medium | 0.05
+| Bananas | 5 | 2 | 1 | Low | 0.95
+|===
+
+Base demand is not a promise. Actual demand is affected by:
+
+* environment
+* customer groups
+* individual customer memory
+* active marketing
+* discounts
+* difficulty
+* seeded randomness
+
+== Simulation Design
+
+The simulator does not roll a single total demand number. It creates customer visits and fulfills baskets against inventory.
+
+[source,text]
+----
+Environment context
+  -> customer visit planning
+  -> requested baskets
+  -> inventory fulfillment
+  -> payment mode
+  -> customer trust and memory update
+  -> inventory ledger
+  -> reward calculation
+----
+
+=== Environment Signals
+
+The game provides signals rather than hidden future answers.
+
+Current signals include:
+
+* weekday and date
+* month phase
+* weekend distance
+* weather and temperature
+* week-level forecast confidence
+* known customer rhythm
+* recent missed demand
+* khata pressure
+* category pressure
+* perishable exposure
+* difficulty focus
+
+Special windows:
+
+[cols="1,3", options="header"]
+|===
+| Period | Meaning
+
+| Days 1-3 | Opening week. Learn normal rhythm.
+| Days 4-6 | School reopening pressure. Students and family routines matter.
+| Day 7 | Supplier delay risk.
+| Days 12-14 | Festival pressure. Family and snack demand can spike.
+| Days 18-24 | Heat-wave stretch. Fridge and perishables matter more.
+| Day 25 onward | Month-end cash and khata discipline matter more.
+|===
+
+=== Customer Model
+
+Customers are modeled as repeatable people or groups, not anonymous demand rows.
+
+Seed examples include:
+
+* Mrs. Sharma
+* Patel Family
+* Cafe Uncle
+* Ravi School Group
+* Office Pantry
+* Hostel Boys
+* Evening Walkers
+* Birthday Kids
+
+Each customer comes from a group profile:
+
+* segment
+* default visit wave
+* base cadence
+* starting trust
+* usual basket
+* price sensitivity
+* substitution tolerance
+* weather affinity
+* event affinity
+* behavior profile
+
+Behavior profile fields:
+
+* patience
+* promotion affinity
+* environment sensitivity
+* relationship sensitivity
+* khata reliability
+* basket flexibility
+* acquisition source
+
+This makes repeat customers inspectable. A model can understand that school students, office pantries, morning households, and snack crowds should not be treated identically.
+
+=== Customer Acquisition
+
+The simulation can generate new named customers over time.
+
+Acquisition is affected by:
+
+* shop trust
+* active marketing
+* promoted products
+* promoted customer segments
+* weather and event pressure
+* existing customer count
+
+Good service and well-timed marketing can grow the repeat-customer base. Low trust makes acquisition harder.
+
+=== Inventory Ledger
+
+Each product is tracked as:
+
+[source,text]
+----
+opening stock
++ ordered stock
+- removed stock
+= available stock
+- sold stock
+- wasted stock
+= closing stock
+----
+
+The report distinguishes:
+
+* stock held before supplier order
+* opening shelf stock when customers arrive
+* ordered units
+* sold units
+* missed demand
+* closing stock
+* waste
+
+This matters because a player or AI must know whether failure came from too little opening stock, too little ordering, unexpectedly high demand, or waste.
+
+=== Perishability
+
+Perishable items use age buckets and FIFO fulfillment.
+
+Tracked perishability fields:
+
+* fresh units
+* aging units
+* at-risk units
+* expired units
+* risk units
+* waste risk cost
+* average freshness
+* status
+* next expiry day
+
+High perishability items:
+
+* milk
+* bananas
+* bread
+
+=== Khata
+
+Khata is delayed payment.
+
+It affects:
+
+* immediate cash
+* money score
+* customer memory
+* reminder actions
+* future relationship pressure
+
+Khata should not be treated as cash. A sale written on khata may look like revenue, but it does not help tomorrow's ordering cash until collected.
+
+=== Trust
+
+Trust is a reputation meter.
+
+Daily trust changes from:
+
+* stockout reputation damage, scaled by missed quantity and product trust impact
+* essential service bonus when high-trust essentials are fully served
+* named customer experience
+* no-stockout bonus
+
+Milk and bread matter strongly because they represent household reliability. A profitable day can still be a weak day if trust collapses.
+
+=== Marketing
+
+Marketing is a demand shaper, not free score.
+
+Campaigns have:
+
+* cost
+* delay
+* duration
+* target segments
+* eligible products
+* expected return
+* risk notes
+
+Marketing is rewarded only when promoted demand is actually served profitably. If a campaign creates demand for items that stock out, marketing score can become negative.
+
+Current campaign families:
+
+* Chalkboard Offer
+* WhatsApp Status
+* School Combo
+* Apartment Pamphlets
+* Festival Bundle Display
+* Loyalty Card
+* Recovery Call
+
+== Reward Model
+
+Daily score is split into buckets:
+
+[cols="1,2,2", options="header"]
+|===
+| Bucket | Rewards | Punishes
+
+| Service | Serving demand, especially named customers | missed named visits and stockouts
+| Inventory | low missed units, healthy closing stock, low waste | stockouts, overstocked perishables, risk cost
+| Money | operating profit, khata collection, cash buffer | khata added, low cash
+| Relationships | fulfilled named customers, trust gains | missed regulars, trust drops
+| Marketing | served promoted demand, ROI, no promoted stockouts | missed promoted demand, poor ROI
+| Operations | useful ordering, offers, reminders, removals | weak or no useful action
+| Penalties | negative pressure from stockouts, waste, khata, no-action days | avoidable operational failure
+|===
+
+Total:
+
+[source,text]
+----
+service + inventory + money + relationships + marketing + operations + penalties
+----
+
+== Backend Architecture
+
+The browser renders the experience. The backend owns authoritative state.
+
+[source,text]
+----
+Browser
+  Vite frontend
+  GameController
+  UIManager
+  ShopRenderer
+  BackendGameClient
+
+Backend
+  Fastify API
+  RunStore
+  SessionStore
+  SQLite database
+  shared simulation modules from src/game
+----
+
+Key modules:
+
+[cols="1,2", options="header"]
+|===
+| Area | Responsibility
+
+| `src/game/GameController.ts` | Screen flow, player actions, restore/start logic, backend calls.
+| `src/ui/UIManager.ts` | DOM UI rendering, opening screen, item popups, reports, controls.
+| `src/render/ShopRenderer.ts` | Canvas/background shop visual state.
+| `src/game/DaySimulator.ts` | Runs one simulated shop day.
+| `src/game/simulation/*` | Demand planning, visits, inventory ledger, khata.
+| `src/game/scoring/ScoringEngine.ts` | Daily reward buckets and total score.
+| `src/game/progression/*` | Difficulty, events, environment signals, AI day context.
+| `server/index.ts` | Fastify routes, static serving, AI replay runner, AI arena routes.
+| `server/ai-arena.ts` | LLM/heuristic arena loop, prompt contract, OpenRouter calls, validation retry, fallback action.
+| `server/run-store.ts` | SQLite persistence for runs and day data.
+| `server/session-store.ts` | Player-name sessions and run listing.
+| `server/db.ts` | SQLite schema and lightweight migrations.
+|===
+
+=== Backend Step Flow
+
+One backend step:
+
+[source,text]
+----
+load run
+deserialize GameState
+normalize player actions
+validate budget and marketing selections
+create new marketing instances
+build active marketing effects
+capture visible state before simulation
+simulate one day
+create DayLog
+resolve campaign outcomes
+advance GameState
+persist day results, inventory, customers, actions, campaigns
+update game_runs.state_json
+return new observation
+----
+
+=== Persistence Tables
+
+[cols="1,3", options="header"]
+|===
+| Table | Purpose
+
+| `players` | Human, AI, and system player records.
+| `player_sessions` | Hashed session tokens and expiry metadata.
+| `game_runs` | Current authoritative serialized state per run.
+| `day_results` | Day-level report JSON and log JSON.
+| `inventory_snapshots` | Item-level opening/sold/missed/waste/closing records.
+| `customer_visits` | Customer demand ledger rows.
+| `customer_state` | Customer memory after each day.
+| `player_actions` | Action JSON submitted for each day.
+| `marketing_campaigns` | Scheduled, active, completed campaign instances.
+| `ai_players` | AI benchmark agent metadata.
+| `ai_decisions` | AI action, rationale, hash, latency, error.
+| `ai_memory_summaries` | Compact memory packets for AI runs.
+| `run_events` | Notable simulation events.
+|===
+
+SQLite uses WAL and foreign keys.
+
+== AI Arena
+
+The AI Arena lets models play through JSON observations and JSON actions.
+
+The arena loop:
+
+[source,text]
+----
+observation JSON
+  -> model returns action JSON plus rationale
+  -> backend sanitizes and validates action
+  -> invalid action gets one retry with feedback
+  -> repeated failure gets conservative fallback action
+  -> backend simulates one day
+  -> reward and next observation are returned
+  -> repeat until Day 30
+----
+
+=== AI Input
+
+The AI receives a packet with:
+
+* episode metadata
+* current cash, trust, score, day, weather
+* environment signals
+* 7-day weather outlook
+* item-level inventory, margin, pack size, perishability, and recent history
+* customer memory and khata state
+* active and available marketing campaigns
+* recent day results
+* reward rules
+* action rules
+* validation feedback, if retrying
+
+The model should infer demand pressure from visible signals. It should not receive hidden future demand.
+
+=== AI Output
+
+The required output:
+
+[source,json]
+----
+{
+  "action": {
+    "orders": {
+      "milk": 20,
+      "bread": 10
+    },
+    "removals": {},
+    "discounts": {
+      "bananas": 10
+    },
+    "khataReminders": ["mrs_sharma"],
+    "marketingActions": [
+      {
+        "specId": "whatsapp_status",
+        "targetProducts": ["milk", "bread", "eggs"]
+      }
+    ],
+    "cashReserve": 600,
+    "fridgeAllocation": {
+      "milk": 60,
+      "cold_drinks": 30,
+      "buffer": 10
+    }
+  },
+  "rationale": "Short reason for the decision."
+}
+----
+
+The simulator executes only the JSON. Rationale text does not create actions.
+
+=== Validation Rules
+
+The backend validates:
+
+* budget
+* pack sizes and product ids
+* valid discount percentages
+* campaign availability and target products
+* khata customer ids
+* action/rationale consistency
+
+Examples:
+
+* If rationale says "order milk" but `orders.milk` is missing, retry.
+* If rationale says "run WhatsApp Status" but `marketingActions` is empty, retry.
+* If rationale says "send khata reminders" but no customer ids are present, retry.
+* If rationale says "discount bananas" but `discounts.bananas` is not positive, retry.
+
+=== OpenRouter Integration
+
+LLM arena mode uses OpenRouter when `OPENROUTER_API_KEY` is configured.
+
+Important tuning fields:
+
+* model id
+* observation mode: full or compact
+* response mode: json_schema, json_object, or text
+* reasoning: off, medium, high, xhigh
+* temperature
+* timeoutMs
+* maxTokens
+* requireJsonSchema
+* requireParameters
+
+== AI Day Record
+
+An AI run should not be judged only by final score. Every day should be recorded as a causal story.
+
+Canonical day flow:
+
+[source,text]
+----
+previous day reality
+  -> upcoming day signals and prediction
+  -> AI action
+  -> simulation result
+  -> reward earned
+  -> next state
+----
+
+=== Five Reader Questions
+
+Every day record should answer:
+
+1. What happened yesterday?
+2. What does the AI think the upcoming day looks like?
+3. What action did the AI take?
+4. What actually happened?
+5. How much reward was earned, and why?
+
+=== Prediction Versus Reality
+
+Always separate:
+
+* AI-visible prediction: what the model inferred before the day.
+* Actual simulator result: what happened after randomness, customers, inventory, and marketing effects resolved.
+
+This keeps the game fair and makes model mistakes understandable.
+
+=== Canonical Day Record Shape
+
+[source,json]
+----
+{
+  "schemaVersion": "ai-day-record.v1",
+  "run": {
+    "runId": "run-id",
+    "playerType": "ai",
+    "runName": "AI Arena - model-name",
+    "episodeDay": 7,
+    "maxDays": 30,
+    "done": false
+  },
+  "model": {
+    "provider": "openrouter",
+    "model": "google/gemini-3.1-flash-lite",
+    "profile": "balanced",
+    "observationMode": "compact",
+    "responseMode": "json_schema",
+    "reasoning": "off",
+    "temperature": 0.15,
+    "maxTokens": 16000,
+    "timeoutMs": 900000
+  },
+  "stateBefore": {},
+  "visibleStateBefore": {},
+  "previousDay": {},
+  "upcomingEnvironment": {},
+  "prediction": {},
+  "decision": {},
+  "actual": {},
+  "reward": {},
+  "stateAfter": {},
+  "persistence": {}
+}
+----
+
+=== `previousDay`
+
+Use the most recent completed `DayLog`.
+
+Include:
+
+* day number
+* visible state before that day
+* player actions
+* events
+* results
+* what worked
+* what failed
+* customer exceptions
+* item exceptions
+
+For Day 1, use opening context because there is no prior day.
+
+=== `upcomingEnvironment`
+
+Use only signals visible before simulation:
+
+* planning day
+* weekday and date
+* weather forecast
+* week forecast
+* confidence
+* randomness band
+* customer rhythm
+* khata pressure
+* market pressure
+* recent missed demand
+* active or scheduled marketing
+* available campaigns
+* inventory and perishability signals
+
+=== `prediction`
+
+Prediction is AI-authored or derived from rationale. It is not hidden truth.
+
+Recommended shape:
+
+[source,json]
+----
+{
+  "planningDay": 7,
+  "headline": "Hot Saturday may lift drinks and snacks",
+  "confidence": "medium",
+  "expectedFootfall": {
+    "overall": "high",
+    "segments": {
+      "student": "medium",
+      "snack": "high",
+      "family": "medium",
+      "regular": "normal",
+      "walkin": "high"
+    }
+  },
+  "itemDemandHypothesis": [
+    {
+      "productId": "cold_drinks",
+      "direction": "up",
+      "reason": "hot weekend signal plus recent sales"
+    }
+  ],
+  "cashRisks": ["Large order may leave too little reserve"],
+  "stockoutRisks": ["Milk and bread missed yesterday"],
+  "wasteRisks": ["Bananas are perishable in heat"],
+  "marketingHypothesis": "Chalkboard offer can lift snack walk-ins if stock is available",
+  "assumptions": ["No hidden demand forecast used"]
+}
+----
+
+=== `decision`
+
+Use stored AI decision and arena trace fields:
+
+* observation hash
+* action JSON
+* rationale
+* model
+* latency
+* retry count
+* validation feedback
+* fallback used
+* error
+
+=== `actual`
+
+Use `DayResult`:
+
+* profit
+* waste loss
+* removal loss
+* khata added
+* khata collected
+* stockouts
+* trust change
+* trust breakdown
+* closing trust
+* closing cash
+* product results
+* inventory movements
+* customer visits
+* customer summary
+* actual environment context
+* marketing performance
+* difficulty
+* unlocked rewards
+* reward breakdown
+
+=== `reward`
+
+Recommended shape:
+
+[source,json]
+----
+{
+  "total": 7,
+  "buckets": {
+    "service": 8,
+    "inventory": -4,
+    "money": 6,
+    "relationships": -2,
+    "marketing": 3,
+    "operations": 1,
+    "penalties": -5
+  },
+  "causes": [
+    "Cold drinks served profitably",
+    "Milk stockout hurt service",
+    "Marketing had positive ROI"
+  ],
+  "cumulativeScore": 124
+}
+----
+
+== Complete State Variable Dictionary
+
+This section lists variables that should be inspectable in a replay/debug UI.
+
+=== Product Identity: `ProductSpec`
+
+* `id`
+* `name`
+* `category`
+* `storage`
+* `baseDemand`
+* `demandVariance`
+* `shelfLife`
+* `unit`
+* `margin`
+* `costPrice`
+* `sellPrice`
+* `trustImpact`
+* `storageUnits`
+* `orderIncrement`
+* `perishabilityFactor`
+
+=== Inventory State: `ProductInventory`
+
+* `productId`
+* `buckets`
+* `totalStock`
+* `discountPct`
+
+=== Stock Bucket: `StockBucket`
+
+* `quantity`
+* `dayAdded`
+
+=== Environment State: `EnvironmentContext`
+
+* `day`
+* `weather`
+* `confidence`
+* `randomnessPct`
+* `segmentVisitMultipliers`
+* `productDemandMultipliers`
+* `signals`
+
+=== Player Action: `PlayerActions`
+
+* `orders`
+* `removals`
+* `discounts`
+* `khataReminders`
+* `marketingActions`
+* `cashReserve`
+* `fridgeAllocation.milk`
+* `fridgeAllocation.cold_drinks`
+* `fridgeAllocation.buffer`
+
+=== Marketing Action Selection
+
+* `specId`
+* `targetProducts`
+
+=== Marketing Campaign Spec
+
+* `id`
+* `name`
+* `channel`
+* `targetSegments`
+* `targetProducts`
+* `cost`
+* `delayDays`
+* `durationDays`
+* `unlockDay`
+* `expectedReturn`
+* `riskNotes`
+
+=== Marketing Campaign Instance
+
+* `id`
+* `runId`
+* `specId`
+* `targetProducts`
+* `plannedDay`
+* `effectStartDay`
+* `effectEndDay`
+* `status`
+* `cost`
+* `actualResult.incrementalVisits`
+* `actualResult.incrementalRevenue`
+* `actualResult.servedTargetUnits`
+* `actualResult.missedUnits`
+* `actualResult.targetGrossMargin`
+* `actualResult.roi`
+* `actualResult.score`
+* `actualResult.promotedStockoutSkus`
+
+=== Marketing Effect
+
+* `campaignId`
+* `specId`
+* `segments`
+* `products`
+* `demandMultiplier`
+* `visitMultiplier`
+* `campaignCost`
+* `allocatedDailyCost`
+
+=== Customer Behavior Profile
+
+* `groupId`
+* `persona`
+* `loyaltyTier`
+* `patience`
+* `promotionAffinity`
+* `environmentSensitivity`
+* `relationshipSensitivity`
+* `khataReliability`
+* `basketFlexibility`
+* `acquisitionSource`
+
+=== Customer Profile
+
+* `id`
+* `name`
+* `segment`
+* `groupId`
+* `persona`
+* `behavior`
+* `preferredWave`
+* `cadence`
+* `visitOffset`
+* `visitPattern`
+* `usualBasket`
+* `substitutionTolerance`
+* `priceSensitivity`
+* `trust`
+* `visitCount`
+* `successfulVisits`
+* `failedVisits`
+* `khataBalance`
+* `remindersSent`
+* `orderHistory`
+* `lastVisitDay`
+
+=== Customer Visit Record
+
+* `day`
+* `requested`
+* `fulfilled`
+* `missed`
+* `outcome`
+* `spend`
+* `paymentMode`
+* `khataAmount`
+
+=== Customer Visit Result
+
+* `customerId`
+* `customerName`
+* `segment`
+* `wave`
+* `requested`
+* `fulfilled`
+* `missed`
+* `revenue`
+* `costOfGoods`
+* `margin`
+* `paymentMode`
+* `amountPaid`
+* `khataAmount`
+* `trustDelta`
+* `outcome`
+* `note`
+* `visitReasons`
+* `demandReasons`
+* `visitProbability`
+
+=== Product Simulation Result
+
+* `productId`
+* `demand`
+* `sold`
+* `stockout`
+* `revenue`
+* `costOfGoods`
+* `margin`
+
+=== Inventory Movement
+
+* `productId`
+* `opening`
+* `openingShelf`
+* `ordered`
+* `removed`
+* `available`
+* `sold`
+* `wasted`
+* `closing`
+* `missedDemand`
+* `offerPct`
+* `perishability`
+
+=== Perishability Snapshot
+
+* `productId`
+* `tracked`
+* `factor`
+* `freshUnits`
+* `agingUnits`
+* `atRiskUnits`
+* `expiredUnits`
+* `riskUnits`
+* `wasteRiskCost`
+* `averageFreshness`
+* `status`
+* `statusLabel`
+* `nextExpiryDay`
+
+=== Customer Memory Summary
+
+* `activeCustomers`
+* `repeatCustomers`
+* `successfulVisits`
+* `failedVisits`
+* `atRiskCustomers`
+* `topCustomerName`
+* `topCustomerVisits`
+
+=== Marketing Performance
+
+* `activeCampaigns`
+* `spendToday`
+* `allocatedActiveCost`
+* `targetVisits`
+* `servedTargetUnits`
+* `missedTargetUnits`
+* `targetGrossMargin`
+* `roi`
+* `promotedStockoutSkus`
+* `score`
+
+=== Trust Breakdown
+
+* `stockoutPenalty`
+* `essentialServiceBonus`
+* `namedCustomerEffect`
+* `noStockoutBonus`
+* `total`
+* `notes`
+
+=== Day Result
+
+* `day`
+* `profit`
+* `wasteLoss`
+* `removalLoss`
+* `khataAdded`
+* `khataCollected`
+* `stockouts`
+* `trustChange`
+* `trustBreakdown`
+* `trust`
+* `cash`
+* `productResults`
+* `inventoryMovements`
+* `customerVisits`
+* `customerSummary`
+* `environmentContext`
+* `marketingPerformance`
+* `difficulty`
+* `unlockedRewards`
+* `rewardBreakdown`
+
+=== Reward Breakdown
+
+* `service`
+* `inventory`
+* `money`
+* `relationships`
+* `marketing`
+* `operations`
+* `penalties`
+* `total`
+
+=== Difficulty Profile
+
+* `day`
+* `week`
+* `label`
+* `focus`
+* `demandMultiplier`
+* `khataPressure`
+* `eventPressure`
+* `activeItemSlots`
+* `unlockedSystems`
+
+=== Shop Reward
+
+* `id`
+* `title`
+* `description`
+* `type`
+* `unlocked`
+
+=== Day Log
+
+* `day`
+* `visibleStateBefore`
+* `playerActions`
+* `events`
+* `crisisResponse`
+* `results`
+
+=== Visible State
+
+* `cash`
+* `trust`
+* `weather`
+* `fridgeUsedPct`
+* `expiryRisk`
+* `day`
+* `maxDays`
+
+=== Serialized Game State
+
+* `day`
+* `cash`
+* `trust`
+* `weather`
+* `inventory`
+* `customers`
+* `history`
+* `currentActions`
+
+=== Run Observation
+
+* `runId`
+* `playerType`
+* `player`
+* `runName`
+* `state`
+* `visibleState`
+* `done`
+* `activeMarketing`
+* `availableMarketing`
+* `scores.total`
+* `scores.lastDay`
+
+=== Arena Day Trace
+
+* `day`
+* `reward`
+* `cash`
+* `trust`
+* `scoreTotal`
+* `action`
+* `rationale`
+* `model`
+* `latencyMs`
+* `retryCount`
+* `error`
+
+== Replay Frontend Vision
+
+The AI replay UI should feel like an observable management-sim, not a log file.
+
+Recommended sections:
+
+1. Run HUD: model, day, score, cash, trust, status.
+2. Yesterday: what happened, what failed, what the AI should remember.
+3. Prediction: what the AI thinks today will look like.
+4. Action: executable orders, discounts, marketing, khata reminders.
+5. Timelapse: customers, sales, misses, khata, stockouts, waste.
+6. Reward: bucket score and causes.
+7. State Inspector: full JSON before and after.
+
+For normal viewers, keep raw state collapsed. For benchmark analysis, expose everything.
+
+Possible game-like UI modes:
+
+* Live Tycoon HUD: shop floor, customers, counters, AI brain, risk cards.
+* Board Game Arena: 30-day route, event tiles, action cards, reward track.
+* Replay Spectator Mode: fast-forward playback, event feed, large counters.
+* Card Strategy View: inventory cards, marketing cards, customer pressure cards.
+
+== Engineering Guardrails
+
+* Backend owns real run state.
+* Browser localStorage is convenience only.
+* Player runs require session ownership.
+* OpenEnv runs are isolated from human runs.
+* AI runs are isolated from human runs.
+* LLM day context can explain environment but does not control gameplay math.
+* AI-visible prediction must stay separate from hidden simulator truth.
+* Rationale is explanatory. Action JSON is executable.
+* Marketing score must be based on served promoted demand, not campaign selection alone.
+* Trust should represent long-term reputation, not only same-day revenue.
+
+== Future Direction
+
+The AI Arena should evolve toward:
+
+* persistent AI day records
+* event-stream replay
+* model-vs-model comparison
+* human-vs-AI comparison
+* per-item and per-customer decision explanations
+* automatic clips for stockouts, trust drops, marketing wins, and cash crises
+* stronger model prompts that explicitly reason about trust, perishability, and marketing ROI
+* better long-term customer memory
+* fair benchmark scenarios with fixed seeds
+
+The long-term product goal is not simply to make an AI play the game. It is to make the AI's shopkeeping behavior understandable, replayable, debuggable, and comparable.

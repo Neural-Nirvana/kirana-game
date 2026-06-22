@@ -22,6 +22,8 @@ observation JSON
   -> repeat until Day 30
 ```
 
+For the day-level replay and analysis shape that explains previous environment, upcoming prediction, AI action, actual result, reward earned, and full state variables, see [AI Day Record](ai-day-record.md).
+
 ## Backend Contract
 
 The arena is built on top of the OpenEnv-compatible APIs:
@@ -196,6 +198,25 @@ The response includes an `arenaId`. Poll it:
 ```bash
 curl -s http://127.0.0.1:8787/api/arena/runs/<arenaId>
 ```
+
+## Visual Replay Route
+
+The game also ships a displayable replay UI at:
+
+```text
+/arena
+```
+
+This route is a Phaser + DOM visualization layer. It starts a fast heuristic benchmark through `POST /api/ai-runs`, adapts the returned `DayLog` timeline and stored AI decisions into replay events, and animates one day at a time.
+
+The visual route is intentionally not a second simulator. It only shows existing or derivable backend values: cash, trust, score, weather, events, visits, sold units, revenue, missed units, khata, marketing ROI, reward buckets, customer visits, inventory movements, and AI decision metadata.
+
+Key files:
+
+- `src/arena/ArenaApp.ts`
+- `src/arena/ArenaStage.ts`
+- `src/arena/arena-adapter.ts`
+- `docs/ai-arena-game-ui-implementation.md`
 
 ## Scoring Goal
 
