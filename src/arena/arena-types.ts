@@ -39,12 +39,71 @@ export interface AiReplayResponse {
   observation: RunObservation;
   timeline: DayLog[];
   decisions: AiDecisionRecord[];
-  summary: {
+  summary?: {
     totalScore: number;
     finalCash: number;
     finalTrust: number;
     daysCompleted: number;
   };
+}
+
+export type ArenaMode = 'llm' | 'heuristic';
+export type ArenaStatus = 'queued' | 'running' | 'complete' | 'failed';
+export type ArenaRunStatus = 'queued' | 'running' | 'complete' | 'failed';
+
+export interface ArenaModelPreset {
+  id: string;
+  label: string;
+  note: string;
+}
+
+export interface ArenaModelsResponse {
+  presets: ArenaModelPreset[];
+  available: Array<{
+    id: string;
+    name?: string;
+    contextLength?: number;
+    pricing?: unknown;
+  }>;
+  note: string;
+}
+
+export interface ArenaDayTrace {
+  day: number;
+  reward: number;
+  cash: number;
+  trust: number;
+  scoreTotal: number;
+  action: PlayerActions;
+  rationale: string;
+  model: string;
+  latencyMs: number;
+  retryCount: number;
+  error?: string;
+}
+
+export interface ArenaRunSummary {
+  model: string;
+  status: ArenaRunStatus;
+  day: number;
+  totalReward: number;
+  runId?: string;
+  finalCash?: number;
+  finalTrust?: number;
+  decisions: ArenaDayTrace[];
+  error?: string;
+}
+
+export interface ArenaJobResponse {
+  arenaId: string;
+  status: ArenaStatus;
+  mode: ArenaMode;
+  models: string[];
+  maxDays: number;
+  createdAt: string;
+  updatedAt: string;
+  runs: ArenaRunSummary[];
+  error?: string;
 }
 
 export interface ArenaReplayEvent {
@@ -130,6 +189,6 @@ export interface ArenaReplayDay {
 
 export interface ArenaReplayRun {
   runId: string;
-  summary: AiReplayResponse['summary'];
+  summary: NonNullable<AiReplayResponse['summary']>;
   days: ArenaReplayDay[];
 }

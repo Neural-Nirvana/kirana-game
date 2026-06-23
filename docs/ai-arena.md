@@ -41,6 +41,30 @@ For convenience, it also exposes first-class arena endpoints:
 
 Arena runs are unowned AI runs, so they do not mix with logged-in human player sessions.
 
+### OpenEnv Versus Arena API
+
+The project supports OpenEnv, but the built-in `/arena` viewer does not call the raw
+OpenEnv endpoints directly.
+
+Use OpenEnv when an external agent framework wants the simple environment loop:
+
+```text
+reset -> observation
+step(action) -> reward, done, next observation
+state -> current episode state
+```
+
+Use the Arena API when the product needs model metadata and replayability:
+
+```text
+start arena job -> model decision -> validation retry/fallback -> saved AI decision -> saved day log -> replay
+```
+
+Both paths use the same backend simulation state and day-step machinery. The Arena
+API is a higher-level wrapper that adds OpenRouter calls, model ids, rationale text,
+latency, validation errors, retries, fallback tracking, and SQLite-backed AI decision
+records.
+
 ## Model Input
 
 Each model receives a JSON packet with:
@@ -207,7 +231,14 @@ The game also ships a displayable replay UI at:
 /arena
 ```
 
-This route is a Phaser + DOM visualization layer. It starts a fast heuristic benchmark through `POST /api/ai-runs`, adapts the returned `DayLog` timeline and stored AI decisions into replay events, and animates one day at a time.
+This route is a Phaser + DOM visualization layer. It can start a live single-model
+arena job through `POST /api/arena/runs`, poll `GET /api/arena/runs/:arenaId`, fetch
+completed day logs through `GET /api/ai-runs/:runId`, and animate days as they become
+available.
+
+The viewer also keeps local shortcuts to recent AI `runId`s. Replaying a saved run
+does not call the model again; it rebuilds the animation from SQLite-stored AI
+decisions and day logs.
 
 The visual route is intentionally not a second simulator. It only shows existing or derivable backend values: cash, trust, score, weather, events, visits, sold units, revenue, missed units, khata, marketing ROI, reward buckets, customer visits, inventory movements, and AI decision metadata.
 

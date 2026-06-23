@@ -18,13 +18,22 @@ The human gameplay UI remains unchanged.
 
 ## Data Source
 
-V1 starts a fast heuristic AI benchmark through the existing backend endpoint:
+The arena viewer uses the first-class AI Arena endpoints for live model runs:
 
 ```text
-POST /api/ai-runs
+GET /api/arena/models
+POST /api/arena/runs
+GET /api/arena/runs/:arenaId
+GET /api/ai-runs/:runId
 ```
 
-The returned `timeline`, `decisions`, `summary`, and `observation` are converted into replay events. No hidden simulator truth is invented in the UI.
+The higher-level Arena API is used instead of raw OpenEnv because the viewer needs
+model ids, rationale, validation retry/fallback state, latency, and saved decision
+records. The raw OpenEnv endpoints remain available for external agents. Both
+paths use the same backend state and simulation step.
+
+Completed day `timeline`, `decisions`, `summary`, and `observation` records are
+converted into replay events. No hidden simulator truth is invented in the UI.
 
 Supported source objects:
 
@@ -117,6 +126,30 @@ Day phase rules:
 - A morning overlay appears when the day begins.
 - Afternoon and evening overlays are inserted from the actual visit count, not clock time.
 - Phase changes use PNG overlays so the shop feels like one continuous environment moving through the day.
+
+### AI Operator Bar
+
+Above the stage, the viewer shows an operator bar:
+
+- selected AI model
+- current run profile
+- max days
+- live job status and completed-day count
+- `Choose AI Model` button
+- `Start Live Run` button
+
+The detailed model controls are not always visible. The `Choose AI Model` button
+opens a modal/popup containing:
+
+- model presets from `GET /api/arena/models`
+- custom OpenRouter model id input
+- max days control for smoke runs
+- Fast live profile
+- Max capability profile
+
+Fast live uses compact observations and shorter response settings for viewability.
+Max capability uses the backend max-capability endpoint with stricter schema,
+medium reasoning, and a long timeout.
 
 ### Bottom Console
 
@@ -236,7 +269,9 @@ Use the placeholder generator only when the sprite sheet is unavailable. It crea
 
 ## Browser Contract
 
-`/arena` starts a heuristic run through `POST /api/ai-runs`, then replays the completed timeline one day at a time.
+`/arena` lets the viewer choose a model, starts a live single-model arena job,
+polls for completed days, and animates each completed day from backend logs.
+Saved replay shortcuts load `GET /api/ai-runs/:runId` and do not call the model again.
 
 The route must continue to meet these constraints:
 
@@ -250,7 +285,7 @@ The route must continue to meet these constraints:
 ## V1 Limits
 
 - Desktop/wide-screen first.
-- `/arena` defaults to heuristic replay.
-- LLM model picker and multi-model comparison are v2.
-- Live-as-model-thinks playback is v2.
+- `/arena` supports a live single-model run.
+- Multi-model comparison is v2.
+- True token-by-token model thought streaming is v2; v1 polls completed day traces.
 - Sprite atlases are deferred until assets stabilize.

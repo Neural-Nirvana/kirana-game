@@ -32,18 +32,24 @@ const fallbackRewards: RewardBreakdown = {
   total: 0,
 };
 
-export function adaptAiReplay(response: AiReplayResponse): ArenaReplayRun {
+export function adaptAiReplay(response: AiReplayResponse, maxDaysOverride?: number): ArenaReplayRun {
   const decisionsByDay = groupDecisions(response.decisions);
+  const maxDays = maxDaysOverride ?? response.observation.visibleState.maxDays ?? DEFAULT_CONFIG.maxDays;
   let runningScore = 0;
   const days = response.timeline.map((log) => {
     runningScore += log.results.rewardBreakdown.total;
     const decisions = decisionsByDay.get(log.day) ?? [];
-    return adaptDay(log, decisions, runningScore, response.observation.visibleState.maxDays ?? DEFAULT_CONFIG.maxDays);
+    return adaptDay(log, decisions, runningScore, maxDays);
   });
 
   return {
     runId: response.runId,
-    summary: response.summary,
+    summary: response.summary ?? {
+      totalScore: runningScore,
+      finalCash: days.at(-1)?.cash ?? Math.round(response.observation.state.cash),
+      finalTrust: days.at(-1)?.trust ?? Math.round(response.observation.state.trust),
+      daysCompleted: days.length,
+    },
     days,
   };
 }
