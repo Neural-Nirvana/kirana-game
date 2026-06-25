@@ -729,12 +729,13 @@ export class RunStore {
       const timeline = this.getTimeline(replay.runId);
       const decisions = this.getAiDecisions(replay.runId);
       const totals = this.summarizeTimeline(timeline);
+      const lastDay = timeline.at(-1)?.results;
       return {
         runId: replay.runId,
         model: replay.model,
         score: replay.score,
-        finalCash: replay.finalCash ?? 0,
-        finalTrust: replay.finalTrust ?? 0,
+        finalCash: replay.finalCash ?? lastDay?.cash ?? 0,
+        finalTrust: replay.finalTrust ?? lastDay?.trust ?? 0,
         daysCompleted: replay.daysCompleted,
         savedAt: replay.savedAt,
         ...totals,
