@@ -229,8 +229,13 @@ function migrate(db: DatabaseSync) {
   db.exec(`
     CREATE UNIQUE INDEX IF NOT EXISTS idx_players_kind_name_key ON players(kind, name_key) WHERE name_key IS NOT NULL;
     CREATE INDEX IF NOT EXISTS idx_game_runs_player_id ON game_runs(player_id, updated_at);
+    CREATE INDEX IF NOT EXISTS idx_game_runs_ai_replays ON game_runs(player_type, status, updated_at);
     CREATE INDEX IF NOT EXISTS idx_player_sessions_token_hash ON player_sessions(token_hash);
     CREATE INDEX IF NOT EXISTS idx_player_sessions_player_id ON player_sessions(player_id);
+    CREATE INDEX IF NOT EXISTS idx_day_results_run_day ON day_results(run_id, day);
+    CREATE INDEX IF NOT EXISTS idx_ai_players_run_model ON ai_players(run_id, model);
+    CREATE INDEX IF NOT EXISTS idx_ai_players_model_run ON ai_players(model, run_id);
+    CREATE INDEX IF NOT EXISTS idx_ai_decisions_run_day ON ai_decisions(run_id, day);
     CREATE INDEX IF NOT EXISTS idx_arena_jobs_status_updated ON arena_jobs(status, updated_at);
     CREATE INDEX IF NOT EXISTS idx_arena_job_runs_arena_id ON arena_job_runs(arena_id);
     CREATE INDEX IF NOT EXISTS idx_ai_provider_responses_run_day ON ai_provider_responses(run_id, day);

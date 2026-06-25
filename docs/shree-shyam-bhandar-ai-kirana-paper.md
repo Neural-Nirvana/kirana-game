@@ -336,16 +336,17 @@ Recent internal arena runs after the fixed-world context and Responses API chang
 
 | Model | Reward | Final Cash | Final Trust | Profit | Sold Units | Missed Units | Diagnosis |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
-| GPT 5.5 | +2136 | Rs 39,071 | 100 | Rs 51,552 | 7,941 | 233 | Strongest strategic run; protected trust and used marketing well |
+| GPT 5.5 | +2294 | Rs 50,184 | 100 | Rs 51,730 | 8,153 | 212 | Strongest strategic run; 30/30 stored request-response records, protected trust, and used marketing well |
 | Gemini 3.1 Pro | +2064 | Rs 45,869 | 97 | Rs 47,506 | 7,558 | 274 | Top-tier high-reasoning run after Responses JSON-object compatibility fix; zero fallbacks and 96.5% service |
 | Claude Opus 4.8 | +1773 | Rs 46,440 | 99 | Rs 47,544 | 7,305 | 473 | Premium reasoning run after campaign-validation fixes; zero fallback days, high trust, and strong marketing ROI |
 | Gemini 3.1 Flash Lite | +1581 | Rs 34,760 | 90 | Rs 38,848 | 6,327 | 583 | Best current fast baseline; no fallbacks, high trust, average latency around 2.5 seconds |
+| Nemotron 3 Ultra 550B | +1352 | Rs 37,904 | 70 | Rs 39,524 | 6,929 | 632 | Compatible text-JSON rerun; zero fallbacks and strong cash, but stockouts kept trust below the top models |
 | Grok 4.3 | +1125 | Rs 34,353 | 29 | Rs 35,075 | 5,640 | 750 | Clean Responses JSON-object run with zero fallbacks, but trust remained weak because stockouts stayed frequent |
 | Gemma 4 31B | +1071 | Rs 33,231 | 58 | Rs 36,875 | 5,963 | 710 | Reliable JSON, but weaker service and trust preservation |
 | Sarvam 105B | +350 | Rs 30,899 | 6 | Rs 31,075 | 5,105 | 1,136 | Direct Indian model API worked, but service gaps caused late trust collapse |
 | Qwen 3.7 Max | +275 | Rs 28,731 | 10 | Rs 28,524 | 4,570 | 1,155 | Clean transport, but weak service coverage and trust collapse |
 
-This is not a claim that one model is universally better. It is a claim about this environment, this prompt contract, this fixed neighborhood, and this simulator version. Transport profile also matters. Gemini 3.1 Flash Lite used a fast text-JSON arena profile, Sarvam 105B and Qwen 3.7 Max used Chat Completions `json_object`, GPT 5.5 used Responses with strict schema, and Gemini 3.1 Pro, Claude Opus 4.8, and Grok 4.3 used Responses `json_object` with high reasoning.
+This is not a claim that one model is universally better. It is a claim about this environment, this prompt contract, this fixed neighborhood, and this simulator version. Transport profile also matters. Gemini 3.1 Flash Lite and Nemotron 3 Ultra used text-JSON arena profiles, Sarvam 105B and Qwen 3.7 Max used Chat Completions `json_object`, GPT 5.5 used Responses with strict schema, and Gemini 3.1 Pro, Claude Opus 4.8, and Grok 4.3 used Responses `json_object` with high reasoning.
 
 The Gemini 3.1 Pro result is a useful harness lesson. Under Chat Completions with strict schema, the same model previously completed 30 days but scored only `+237`, ended with trust `0`, and needed six fallback days because its rationale and executable action often diverged. After moving it to OpenRouter Responses and using `json_object` plus backend validation, it reached `+2064`, retained trust at `97`, served `96.5%` of demand, and used zero fallback days. The business policy improved, but the bigger finding is about evaluation design: agent benchmarks must measure both model intelligence and the reliability of the action contract.
 

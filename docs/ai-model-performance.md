@@ -51,7 +51,20 @@ To make future comparisons more serious:
 
 This section resets comparison after the major arena changes: OpenRouter Responses API for GPT 5.4/5.5 family models, stricter action/rationale validation, fixed neighborhood world context, updated trust/customer simulation, and marketing-aware scoring.
 
-The GPT 5.5 and Gemma 4 31B rows used the same compact JSON-focused reset profile:
+The current GPT 5.5 row uses the long-horizon Responses profile we now prefer for expensive/high-reasoning reruns:
+
+- Date: 2026-06-25
+- Episode length: 30 days
+- Observation mode: compact
+- Response mode: JSON schema
+- Reasoning: medium
+- Temperature: 0.15
+- Timeout: 15 minutes per day call
+- Max output tokens: 16000
+- Seed: 20260624
+- Local backend: Fastify/SQLite arena runner with stored provider request/response rows
+
+The Gemma 4 31B reset row used the earlier compact JSON-focused profile:
 
 - Date: 2026-06-24
 - Episode length: 30 days
@@ -64,10 +77,12 @@ The GPT 5.5 and Gemma 4 31B rows used the same compact JSON-focused reset profil
 
 | Model | OpenRouter id | Transport | Reward | Final cash | Final trust | Profit | Revenue | Sold units | Missed units | Stockouts | Waste loss | Retries | Fallbacks | Latency | Run id | Diagnosis |
 |---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---|---|
-| GPT 5.5 | `openai/gpt-5.5` | Responses API, medium reasoning, strict schema | `+2136` | `₹39,071` | `100` | `₹51,552` | `₹241,750` | `7,941` | `233` | `37` | `₹0` | `2` | `1` | Avg 63s, max 150s | `c3b4bec9-e0ff-4b09-8cfd-1ad034aa072a` | Strongest clean strategic run after the new world context. It reached 100 trust by mid-game, kept waste at zero, and used marketing throughout. The only fallback happened on Day 30 after a rationale/action mismatch about chips and cold drinks. |
+| GPT 5.5 | `openai/gpt-5.5` | Responses API, medium reasoning, strict schema | `+2294` | `₹50,184` | `100` | `₹51,730` | `₹245,995` | `8,153` | `212` | `29` | `₹0` | `1` | `0` | Avg 87.9s | `a85347fa-6a77-4d70-8f53-a7bb863ca221` | New strongest strategic run with `30/30` stored request/response pairs. It served `97.5%` of demand, kept trust capped at `100`, avoided waste, and reached `12.35x` marketing ROI. Three provider rows finished as `incomplete` but still returned parseable action JSON; one Day 24 JSON retry recovered without fallback. |
 | Gemini 3.1 Pro | `google/gemini-3.1-pro-preview` | Responses API `json_object`, high reasoning, compact observation | `+2064` | `₹45,869` | `97` | `₹47,506` | `₹227,539` | `7,558` | `274` | `43` | `₹0` | `8` | `0` | Avg 22.9s, max 40.9s | `91dd17a6-609c-4429-851f-956b324b37ff` | Transport fix turned Gemini Pro into a top-tier run. Strict Responses schema failed on Google's nested product-map schema, so the successful run used Responses `json_object` plus backend validation. It reached `96.5%` service, zero waste, high marketing score, and retained `97` trust with no fallbacks. |
 | Claude Opus 4.8 | `anthropic/claude-opus-4.8` | Responses API `json_object`, high reasoning, compact observation | `+1773` | `₹46,440` | `99` | `₹47,544` | `₹222,000` | `7,305` | `473` | `49` | `₹0` | `2` | `0` | Avg 27.8s, max 43.1s | `9f16faf4-e6f6-4f82-9f09-2760f7338aa6` | Strong rerun after campaign-validation fixes. It completed 30 days with zero fallback days, high trust, zero waste, `93.9%` service, and `13.1x` marketing ROI. Two retries remained from active-campaign wording edge cases. Recorded OpenRouter cost was about `$2.54`. |
 | Gemini 3.1 Flash Lite | `google/gemini-3.1-flash-lite` | Chat Completions text JSON, reasoning off, compact observation | `+1581` | `₹34,760` | `90` | `₹38,848` | `₹190,663` | `6,327` | `583` | `51` | `₹700` | `4` | `0` | Avg 2.5s, max 4.2s | `992b28d4-0bcc-40f7-99a8-d572f1bc4407` | Strong fast baseline on the current engine. It completed 30 days with no fallbacks, kept trust high, ran marketing every day, and scored far above earlier Gemini runs. Not a strict transport match with GPT/Gemma because it used text JSON parsing instead of strict schema. |
+| Nemotron 3 Ultra 550B | `nvidia/nemotron-3-ultra-550b-a55b` | Chat Completions text JSON, reasoning off, compact observation | `+1352` | `₹37,904` | `70` | `₹39,524` | `₹201,772` | `6,929` | `632` | `68` | `₹0` | `2` | `0` | Avg 31.8s | `65119357-133b-47e0-94fe-bd25b6a71b49` | Current compatible-text rerun. It improved over the older fallback-assisted Nemotron result and stored `32` provider responses for `30` accepted decisions due to two validator retries. Transport was usable: zero empty outputs and zero fallbacks. Strategy was mid-table: `91.6%` service, zero waste, `8.16x` marketing ROI, but stockouts and final trust `70` kept it below the top models. |
+| Gemini 3.5 Flash | `google/gemini-3.5-flash` | Responses API `json_object`, medium reasoning, compact observation | `+1261` | `₹41,097` | `74` | `₹42,242` | `₹203,598` | `6,804` | `501` | `67` | `₹0` | `0` | `0` | Avg 13.4s, max not recorded | `5c523d39-8cea-4138-94c8-0d7687b65303` | Clean corrected run after strict schema failed. It completed 30 days with zero retries/fallbacks/errors, good cash, zero waste, `93.1%` service, and `11.6x` marketing ROI. It underperformed Gemini 3.1 Flash Lite on reward and trust, mostly from more stockout incidents and weaker relationship protection. |
 | Grok 4.3 | `x-ai/grok-4.3` | Responses API `json_object`, high reasoning, compact observation | `+1125` | `₹34,353` | `29` | `₹35,075` | `₹166,980` | `5,640` | `750` | `72` | `₹0` | `0` | `0` | Avg 41.5s, max 79s | `bbc2a6ef-7419-4341-9006-e6231fc59971` | Strong transport result: zero retries, zero fallbacks, and valid Responses JSON-object all 30 days. Business result was mid-table because it made cash but allowed frequent stockouts and trust fell to `29`. |
 | Gemma 4 31B | `google/gemma-4-31b-it` | Chat Completions `json_object`, medium reasoning | `+1071` | `₹33,231` | `58` | `₹36,875` | `₹176,434.50` | `5,963` | `710` | `68` | `₹0` | `2` | `0` | Avg 55s, max 117s | `ffaaf6aa-0fec-4746-8a92-3e96d328abe9` | Reliable JSON in `json_object` mode, but strategically weaker. It made money and had no fallbacks, yet repeated stockout/trust collapses kept the final score far below GPT 5.5. |
 | GLM 5.2 | `z-ai/glm-5.2` | Chat Completions strict schema, `xhigh` reasoning, compact observation | `+515` | `₹29,028` | `0` | `₹27,953` | `₹139,291` | `4,701` | `825` | `104` | `₹0` | `1` | `0` | Avg 38.9s, max 138.9s | `20442bac-dec2-475d-9fff-200174f4debe` | Technically clean at max reasoning: one retry, zero fallbacks, and strong marketing score. Strategically it under-served essentials/perishables too often, had stockouts on 27 days, and trust collapsed to zero. |
@@ -84,18 +99,23 @@ Sarvam 105B used Sarvam's own OpenAI-compatible Chat Completions endpoint, not O
 
 Gemini 3.1 Pro now uses OpenRouter Responses with `responseMode=json_object` and `reasoning.effort: "high"`. OpenRouter maps Gemini 3 reasoning to Google's `thinkingLevel`; `xhigh` is mapped down to `high`, so the run used `high` directly. A strict Responses schema smoke run failed because Google rejected the nested product-map `required` keys, so the compatible profile is Responses JSON-object plus backend validation and retry.
 
+Gemini 3.5 Flash should also use OpenRouter Responses with `responseMode=json_object` for this arena. A strict-schema 30-day attempt completed only through conservative fallback actions because Google rejected the nested `discounts` product-map schema (`schema at properties.action.properties.discounts requires unspecified property 'milk'`). That strict run scored `-1794` with `30/30` fallbacks and should be treated as a harness compatibility failure, not a model benchmark.
+
 Grok 4.3 was run after changing the max-capability OpenRouter default to persisted async arena jobs with Responses transport. OpenRouter's model catalog reports `x-ai/grok-4.3` with reasoning efforts `high`, `medium`, `low`, and `none`; the benchmark used `high` reasoning, 16000 max output tokens, 15-minute timeout, seed `20260624`, and Responses `json_object`. The result is a useful harness signal: the transport was clean for all 30 days, but the model still needs better trust-preserving stock policy.
 
 Claude Opus 4.8 was rerun after fixing campaign-validation false positives that had punished references to already active campaigns. The benchmark used compact observation, OpenRouter Responses `json_object`, high reasoning, 4096 max output tokens, 15-minute timeout, seed `20260624`, and temperature `0.15`. It completed all 30 days with no fallback days, `2` validation retries, and recorded provider usage of `192,735` input tokens, `62,957` output tokens, `13,665` reasoning tokens, and about `$2.54` OpenRouter cost. The result is now a valid current benchmark, though active-campaign wording should still be tightened before larger expensive batches.
+
+Nemotron 3 Ultra 550B was rerun with the compatibility profile that previously worked better than strict schema: compact observation, Chat Completions text JSON, reasoning off, 16000 max output tokens, 15-minute timeout, seed `20260624`, and temperature `0.15`. It completed all 30 days with no fallback days and no empty outputs. Two retries came from validation/rationale mismatches: Day 11 mentioned marketing campaigns without emitting matching `marketingActions`, and Day 16 mentioned ordering products not present in `action.orders`.
 
 Product service rates:
 
 | Model | Milk | Bread | Eggs | Maggi | Chips | Cold drinks | Bananas |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| GPT 5.5 | 94.1% | 97.3% | 99.7% | 99.4% | 99.9% | 98.0% | 90.3% |
+| GPT 5.5 | 95.4% | 97.7% | 99.2% | 99.4% | 99.3% | 96.7% | 95.1% |
 | Gemini 3.1 Pro | 95.0% | 95.7% | 98.6% | 96.7% | 97.8% | 96.9% | 97.2% |
 | Claude Opus 4.8 | 92.4% | 92.8% | 98.0% | 94.4% | 95.0% | 93.0% | 96.3% |
 | Gemini 3.1 Flash Lite | 89.5% | 91.6% | 99.5% | 94.0% | 88.8% | 88.6% | 97.1% |
+| Nemotron 3 Ultra 550B | 86.9% | 92.9% | 99.6% | 93.3% | 94.4% | 89.6% | 86.1% |
 | Grok 4.3 | 82.7% | 89.7% | 98.7% | 92.0% | 87.9% | 87.8% | 81.1% |
 | Gemma 4 31B | 89.0% | 92.4% | 87.2% | 90.0% | 89.1% | 87.6% | 94.4% |
 | GLM 5.2 xhigh | 79.3% | 88.5% | 91.7% | 88.0% | 86.7% | 85.8% | 76.6% |
@@ -104,10 +124,11 @@ Product service rates:
 
 Interpretation:
 
-- GPT 5.5 remains the strongest strategic run in this block: highest reward, final trust capped at `100`, zero waste, and the lowest missed units.
+- GPT 5.5 remains the strongest strategic run in this block: highest reward, final trust capped at `100`, zero waste, the lowest missed units, and `30/30` stored request/response rows for audit.
 - Gemini 3.1 Pro is the closest high-reasoning challenger in raw reward and service: `+2064`, final trust `97`, zero waste, and `96.5%` service, but it needed `8` validation retries.
 - Claude Opus 4.8 is now a strong premium reasoning benchmark after the campaign-validator fix: `+1773`, final trust `99`, zero fallbacks, zero waste, and `13.1x` marketing ROI, but at materially higher cost than most runs.
 - Gemini 3.1 Flash Lite is now the best fast practical baseline. It reached `+1581` with `90` trust, no fallbacks, `4` retries, average latency around `2.5s`, and marketing active on every day. Its main weaknesses versus GPT 5.5 were more missed units, lower milk/cold-drink service, and `₹700` waste loss.
+- Nemotron 3 Ultra 550B is now a valid current compatible-text benchmark: `+1352`, final trust `70`, zero fallbacks, zero waste, and `8.16x` marketing ROI. It beats Gemini 3.5 Flash on reward but not on service rate or trust stability.
 - Gemma 4 31B remained transport-reliable in `json_object` mode, but its service gaps hurt trust. Its final trust was `58` versus GPT's capped `100`.
 - GLM 5.2 with `xhigh` reasoning was format-reliable and cleaner than older GLM attempts, but the business result was only mid-table: `+515`, final trust `0`, `825` missed units, and stockouts on `27/30` days.
 - Grok 4.3 is the cleanest new transport check: `0` retries and `0` fallbacks through Responses `json_object`. It beat Gemma on raw reward by a small margin, but not on trust; `25/30` stockout days and weak milk/banana service held it back.
@@ -119,7 +140,10 @@ Interpretation:
 
 | Date | Model | Arena profile | Reward | Final cash | Final trust | Profit | Revenue | Sold units | Missed units | Fallbacks | Latency note | Summary |
 |---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---|---|
+| 2026-06-25 | `openai/gpt-5.5` | Provider-capture rerun: compact observation, Responses strict schema, medium reasoning, 16000 tokens, 15m timeout, seed `20260624` | `+2294` | `₹50,184` | `100` | `₹51,730` | `₹245,995` | `8,153` | `212` | `0/30`, `1` retry | Avg ~87.9s | Best current benchmark. The live DB stores `30/30` request JSON rows, `30/30` response text rows, response IDs, usage metadata, and zero empty-content rows. It reached `97.5%` service, zero waste, marketing score `+261`, `12.35x` marketing ROI, and final trust `100`. Three provider rows ended with `finish_reason=incomplete` but returned parseable action JSON; the only retry was a Day 24 JSON correction. |
 | 2026-06-25 | `anthropic/claude-opus-4.8` | Fixed campaign-validation rerun: compact observation, Responses `json_object`, high reasoning, 4096 tokens, 15m timeout, seed `20260624` | `+1773` | `₹46,440` | `99` | `₹47,544` | `₹222,000` | `7,305` | `473` | `0/30`, `2` retries | Avg ~27.8s, max ~43.1s | Clean full benchmark after the active-campaign validator fix. It reached `93.9%` service, zero waste, marketing score `+213`, `13.1x` marketing ROI, and final trust `99`. Cost was about `$2.54`; two retries came from remaining active-campaign wording edge cases, but no fallback action was used. |
+| 2026-06-25 | `nvidia/nemotron-3-ultra-550b-a55b` | Current compatible-text rerun: compact observation, Chat Completions text JSON, reasoning off, 16000 tokens, 15m timeout, seed `20260624` | `+1352` | `₹37,904` | `70` | `₹39,524` | `₹201,772` | `6,929` | `632` | `0/30`, `2` retries | Avg ~31.8s | Cleaner than the older fallback-assisted Nemotron run. It stored `32` provider request/response rows for `30` accepted decisions, had zero empty outputs and zero fallbacks, served `91.6%` of demand, avoided waste, and reached `8.16x` marketing ROI. Weaknesses were stockout incidents (`68`), milk/banana service gaps, and final trust only `70`. |
+| 2026-06-25 | `google/gemini-3.5-flash` | Corrected Responses compatibility run: compact observation, Responses `json_object`, medium reasoning, 16000 tokens, 15m timeout, seed `20260624` | `+1261` | `₹41,097` | `74` | `₹42,242` | `₹203,598` | `6,804` | `501` | `0/30`, `0` retries | Avg ~13.4s | Clean run with `30/30` stored provider responses, zero empty content, zero fallbacks, zero waste, `93.1%` service, marketing score `+159`, and `11.6x` marketing ROI. It is a usable fast-ish Responses benchmark, but it scored below Gemini 3.1 Flash Lite and far below Gemini 3.1 Pro because trust softened to `74` and stockouts reached `67` incidents. |
 | 2026-06-24 | `google/gemini-3.1-pro-preview` | Responses compatibility fix: compact observation, Responses `json_object`, high reasoning, 16000 tokens, 15m timeout, seed `20260624` | `+2064` | `₹45,869` | `97` | `₹47,506` | `₹227,539` | `7,558` | `274` | `0/30`, `8` retries | Avg ~22.9s, max ~40.9s | Strong rerun after moving Gemini Pro away from strict Responses schema. It reached `96.5%` service, zero waste, marketing score `+220`, and retained trust at `97`. Total recorded OpenRouter cost was about `$1.21`, with `72,488` reasoning tokens. |
 | 2026-06-25 | `x-ai/grok-4.3` | Responses default check: compact observation, Responses `json_object`, high reasoning, 16000 tokens, 15m timeout, seed `20260624` | `+1125` | `₹34,353` | `29` | `₹35,075` | `₹166,980` | `5,640` | `750` | `0/30`, `0` retries | Avg ~41.5s, max ~79s | Transport and parsing were excellent: zero retries/fallbacks, finish reason `completed`, and about `$0.35` recorded OpenRouter cost with `78,371` reasoning tokens. Strategy was only mid-table: service rate `88.3%`, stockouts on `25/30` days, and final trust `29`. |
 | 2026-06-24 | `z-ai/glm-5.2` | Max reasoning test: compact observation, strict JSON schema, `xhigh` reasoning, 16000 tokens, 15m timeout, seed `20260624` | `+515` | `₹29,028` | `0` | `₹27,953` | `₹139,291` | `4,701` | `825` | `0/30`, `1` retry | Avg ~38.9s, max ~138.9s | Clean structured execution with no fallbacks and marketing active on `29/30` days. Not strategically competitive with GPT/Gemini: service rate `85.1%`, stockouts on `27/30` days, and trust collapsed late. |
@@ -148,6 +172,7 @@ Interpretation:
 | Gemma 4 26B text | 90.4% | 93.9% | 96.5% | 94.2% | 94.5% | 89.1% | 93.4% |
 | GLM 5.2 medium reasoning | 81.0% | 86.9% | 91.1% | 87.2% | 86.3% | 84.9% | 75.1% |
 | Nemotron 3 Ultra text | 85.3% | 92.6% | 99.6% | 92.7% | 92.4% | 85.7% | 80.4% |
+| Nemotron 3 Ultra current compatible text | 86.9% | 92.9% | 99.6% | 93.3% | 94.4% | 89.6% | 86.1% |
 | Gemma 4 26B parallel v2 | 87.0% | 91.8% | 97.6% | 91.9% | 89.1% | 83.9% | 89.1% |
 | Qwen 3.7 Plus parallel v2 | 88.6% | 93.8% | 94.7% | 97.1% | 92.8% | 90.3% | 90.7% |
 | Minimax M3 challenge text v1 | 82.5% | 90.5% | 96.9% | 88.0% | 88.5% | 93.0% | 78.7% |
@@ -170,6 +195,7 @@ Interpretation:
 | 2026-06-21 | `z-ai/glm-5.2` | Strict JSON schema, `require_parameters`, `xhigh` reasoning, 16000 tokens, 3m timeout | Abandoned | Day 7 hit app-level abort. The timeout was our cap, not necessarily model failure. |
 | 2026-06-21 | `nvidia/nemotron-3-ultra-550b-a55b` | Max-capability strict JSON schema, `require_parameters`, medium reasoning, 16000 tokens, 15m timeout | One-day smoke fell back | Arena call returned no message content under strict schema. Direct simple OpenRouter probes could return valid JSON, so the failure appears tied to the larger arena prompt/schema combination. |
 | 2026-06-25 | `anthropic/claude-opus-4.8` | Pre-fix cost check: compact observation, Responses `json_object`, high reasoning, 4096 tokens, 15m timeout, seed `20260624` | Superseded by fixed-validator 30-day benchmark | The 1-day smoke completed cleanly with zero retries at about `$0.063`. The 5-day pilot cost about `$0.32`, ended score `+45`, final cash `₹6,005`, trust `53`, service rate `75.4%`, and hit `2` retries plus `1` fallback on Day 5. Diagnosis: the old validator treated references to active/delayed campaigns as new campaign claims. This was a harness issue, not a provider transport failure. |
+| 2026-06-25 | `google/gemini-3.5-flash` | Max-capability strict schema: compact observation, Responses strict schema, medium reasoning, 16000 tokens, 15m timeout, seed `20260624` | Superseded by JSON-object run | Strict schema was incompatible with Google's structured-output schema validator for our nested product maps. All `30/30` days used fallback actions, ending score `-1794`, final cash `₹6,178`, and trust `0`. This run is useful only as a harness note: use Responses `json_object` for Gemini 3.5 Flash. |
 | 2026-06-21 | `moonshotai/kimi-k2.7-code` | Parallel compact text v2: schema disabled, reasoning off, 2000 tokens, 180s timeout | Stopped after Qwen completed; Kimi was at 20 persisted days | `19/20` recorded decisions hit no-content fallback. Reward was `-1120`, final trust `0`, and service quality was poor except eggs. Not usable in this arena prompt shape. |
 | 2026-06-21 | `minimax/minimax-m3` | High-reasoning plain text smoke: schema disabled, reasoning high, 16000 tokens, 15m timeout | One-day smoke fell back | OpenRouter returned no message content. The same model worked when `reasoning` was disabled, so the full run used plain text JSON with reasoning off. |
 
@@ -183,11 +209,14 @@ Interpretation:
 - `moonshotai/kimi-k2.7-code` is not compatible with the current compact arena prompt; it repeatedly returns no message content.
 - `minimax/minimax-m3` is strategically literate but action-brittle. It plans around weather, shelf life, cash, and stockouts, but repeatedly says it will run campaigns without actually emitting `marketingActions`.
 - `google/gemini-3.1-flash-lite` is the fastest model tested so far and now the strongest fast practical baseline: the 2026-06-24 current-engine run reached `+1581`, final trust `90`, no fallbacks, and average latency around `2.5s`.
+- `google/gemini-3.5-flash` is transport-clean under Responses `json_object`: `+1261`, final trust `74`, zero retries/fallbacks/errors, average latency around `13.4s`, and `30/30` stored request/response records. It should not be run with strict schema until the action schema is flattened or translated for Google's validator.
 - `z-ai/glm-5.2` with max-style `xhigh` reasoning is now validated as transport-stable in the current arena: `+515`, `1` retry, zero fallbacks, average latency around `38.9s`. It is not yet strategically strong because stockouts remained frequent and final trust reached `0`.
 - `sarvam-105b` is now integrated through Sarvam's direct API. Use `json_object`, `reasoning_effort: "high"`, and `maxTokens: 4096` for this Starter-tier key. The first full run reached `+350`, better than Qwen but still weak on trust.
 - `qwen/qwen3.7-max` is cleaner than DeepSeek V4 Pro in the current profile, but its first full run is not competitive: `+275`, final trust `10`, `1,155` missed units, and roughly `42s` average latency.
 - `x-ai/grok-4.3` is validated as a clean Responses `json_object` model in the current arena: `+1125`, zero retries, zero fallbacks, and roughly `41.5s` average latency. It is not yet strategically top-tier because trust ended at `29` after frequent stockouts.
 - `anthropic/claude-opus-4.8` is now a valid current benchmark after the campaign-validation fix: `+1773`, final trust `99`, `0` fallbacks, `2` retries, and about `$2.54` recorded OpenRouter cost. The remaining retries show active-campaign wording still needs one more validator polish before larger expensive batches.
+- `openai/gpt-5.5` now has a provider-captured full replay in the live DB: `+2294`, final cash `₹50,184`, final trust `100`, `97.5%` service, `0` fallbacks, `1` retry, and `30/30` stored request/response records.
+- `nvidia/nemotron-3-ultra-550b-a55b` should be judged from the current compatible-text rerun, not the old fallback-assisted row: it reached `+1352`, final cash `₹37,904`, final trust `70`, `91.6%` service, `0` fallbacks, and `2` validator retries.
 - Avoid `xhigh` for normal benchmark loops unless the run is intentionally overnight.
 - Keep `timeoutMs` high enough for thinking models, but use medium reasoning for practical iteration.
 - Marketing is now measurable in validator runs. Gemini Flash Lite reached marketing score `+141` after the discount fix, but promoted-stockout days still show that campaign choice needs better inventory-aware guardrails.
