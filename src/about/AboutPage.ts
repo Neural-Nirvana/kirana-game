@@ -2,14 +2,13 @@ import './about.css';
 import '../arena/provider-brand.css';
 import { PRODUCT_NAME, PRODUCT_TAGLINE, SHOP_NAME, SHOP_LOCATION } from '../constants/brand';
 import { DEFAULT_NEIGHBORHOOD_PROFILE } from '../constants/neighborhood';
-import { getBenchmarkDiagnosis } from '../arena/benchmark-catalog';
 import {
   DEFAULT_MODEL_PRESETS,
   money,
   requestJson,
   signed,
 } from '../arena/arena-shared';
-import { renderBenchmarkModelCell } from '../arena/provider-brand';
+import { initProviderLogoFallbacks, renderBenchmarkModelCell } from '../arena/provider-brand';
 import type { ArenaScoreboardResponse } from '../arena/arena-types';
 
 import stageBackdropUrl from '../assets/arena/stage-backdrop.png';
@@ -72,6 +71,7 @@ export class AboutPage {
       const mount = this.root.querySelector('#about-leaderboard-mount');
       if (mount) {
         mount.innerHTML = this.renderLeaderboardBlock();
+        initProviderLogoFallbacks(mount);
         this.bindScrollReveal();
       }
     }
@@ -514,7 +514,6 @@ export class AboutPage {
                 <th scope="col">Profit</th>
                 <th scope="col">Sold Units</th>
                 <th scope="col">Missed Units</th>
-                <th scope="col">Diagnosis</th>
               </tr>
             </thead>
             <tbody>
@@ -527,7 +526,6 @@ export class AboutPage {
                   <td class="${row.profit >= 0 ? 'good' : 'bad'}">${money(row.profit)}</td>
                   <td>${row.soldUnits.toLocaleString('en-IN')}</td>
                   <td class="${row.missedUnits > 0 ? 'bad' : 'good'}">${row.missedUnits.toLocaleString('en-IN')}</td>
-                  <td class="about-diagnosis-cell">${escapeHtml(getBenchmarkDiagnosis(row.model) ?? 'Completed 30-day benchmark run from SQLite replay.')}</td>
                 </tr>
               `).join('')}
             </tbody>

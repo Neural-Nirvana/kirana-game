@@ -5,7 +5,7 @@ import { PRODUCT_NAME, PRODUCT_TAGLINE, SHOP_NAME, SHOP_LOCATION } from '../cons
 import sidebarHeroUrl from '../assets/arena2/sidebar-hero.jpg';
 import emptyStateUrl from '../assets/arena2/empty-state.jpg';
 import { adaptAiReplay } from './arena-adapter';
-import { renderBenchmarkModelCell } from './provider-brand';
+import { initProviderLogoFallbacks, renderBenchmarkModelCell } from './provider-brand';
 import { ArenaStage } from './ArenaStage';
 import {
   actionIcon,
@@ -977,6 +977,7 @@ export class ArenaApp2 {
         ` : ''}
       </div>
     `;
+    initProviderLogoFallbacks(this.requireElement('a2-sidebar'));
   }
 
   private renderTransport() {

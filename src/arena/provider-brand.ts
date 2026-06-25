@@ -1,4 +1,5 @@
 import type { ArenaModelPreset } from './arena-types';
+import { brandfetchLogoUrl } from './brandfetch';
 import { modelLabel } from './arena-shared';
 import { isHeuristicModel } from './replay-ranking';
 
@@ -13,6 +14,7 @@ export type ModelProvider =
   | 'nvidia'
   | 'sarvam'
   | 'qwen'
+  | 'minimax'
   | 'heuristic'
   | 'unknown';
 
@@ -27,8 +29,23 @@ const PROVIDER_LABELS: Record<ModelProvider, string> = {
   nvidia: 'NVIDIA',
   sarvam: 'Sarvam AI',
   qwen: 'Qwen',
+  minimax: 'MiniMax',
   heuristic: 'Built-in',
   unknown: 'Model',
+};
+
+const PROVIDER_DOMAINS: Partial<Record<ModelProvider, string>> = {
+  openai: 'openai.com',
+  google: 'google.com',
+  gemma: 'google.com',
+  anthropic: 'anthropic.com',
+  xai: 'x.ai',
+  deepseek: 'deepseek.com',
+  zhipu: 'zhipuai.cn',
+  nvidia: 'nvidia.com',
+  sarvam: 'sarvam.ai',
+  qwen: 'qwen.ai',
+  minimax: 'minimax.io',
 };
 
 const PROVIDER_SVGS: Record<ModelProvider, string> = {
@@ -99,6 +116,12 @@ const PROVIDER_SVGS: Record<ModelProvider, string> = {
       <path fill="#4f46e5" d="M7.5 7.5h9v2h-9v-2zm0 4h6.5v2H7.5v-2zm0 4h8.5v2H7.5v-2z"/>
     </svg>
   `,
+  minimax: `
+    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="MiniMax">
+      <rect width="24" height="24" rx="6" fill="#eef2ff"/>
+      <path fill="#2563eb" d="M7 7.5h10v2H7v-2zm0 4h7v2H7v-2zm0 4h9v2H7v-2z"/>
+    </svg>
+  `,
   heuristic: `
     <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Built-in heuristic">
       <rect width="24" height="24" rx="6" fill="#e8f5ef"/>
@@ -127,6 +150,7 @@ export function providerFromModel(model: string): ModelProvider {
   if (id.startsWith('nvidia/') || id.includes('nemotron')) return 'nvidia';
   if (id.startsWith('sarvam')) return 'sarvam';
   if (id.startsWith('qwen/')) return 'qwen';
+  if (id.startsWith('minimax/')) return 'minimax';
   return 'unknown';
 }
 
@@ -134,12 +158,48 @@ export function providerDisplayName(provider: ModelProvider): string {
   return PROVIDER_LABELS[provider];
 }
 
-export function renderProviderLogo(provider: ModelProvider, size = 28): string {
+export function renderProviderLogoSvg(provider: ModelProvider, size = 28): string {
   return `
-    <span class="provider-logo provider-logo--${provider}" style="--provider-logo-size:${size}px" aria-hidden="true">
+    <span class="provider-logo provider-logo--${provider} provider-logo--svg" style="--provider-logo-size:${size}px" aria-hidden="true">
       ${PROVIDER_SVGS[provider]}
     </span>
   `;
+}
+
+export function renderProviderLogo(provider: ModelProvider, size = 28): string {
+  const domain = PROVIDER_DOMAINS[provider];
+  const label = providerDisplayName(provider);
+  if (domain) {
+    return `
+      <span class="provider-logo provider-logo--${provider} provider-logo--brandfetch" style="--provider-logo-size:${size}px">
+        <img
+          src="${brandfetchLogoUrl(domain, size)}"
+          alt="${escapeHtml(label)}"
+          loading="lazy"
+          decoding="async"
+          data-provider-logo="${provider}"
+        />
+      </span>
+    `;
+  }
+  return renderProviderLogoSvg(provider, size);
+}
+
+export function initProviderLogoFallbacks(root: ParentNode = document) {
+  root.querySelectorAll<HTMLImageElement>('img[data-provider-logo]').forEach((image) => {
+    if (image.dataset.fallbackBound === 'true') return;
+    image.dataset.fallbackBound = 'true';
+    image.addEventListener('error', () => {
+      const provider = image.dataset.providerLogo as ModelProvider | undefined;
+      if (!provider || !PROVIDER_SVGS[provider]) return;
+      const shell = image.closest('.provider-logo');
+      if (!shell) return;
+      shell.classList.remove('provider-logo--brandfetch');
+      shell.classList.add('provider-logo--svg');
+      shell.innerHTML = PROVIDER_SVGS[provider];
+      shell.setAttribute('aria-hidden', 'true');
+    }, { once: true });
+  });
 }
 
 export function renderBenchmarkModelCell(

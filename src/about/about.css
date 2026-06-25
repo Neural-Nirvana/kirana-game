@@ -441,7 +441,7 @@ body.about-route {
 
 .about-leaderboard-table {
   width: 100%;
-  min-width: 1280px;
+  min-width: 980px;
   border-collapse: collapse;
 }
 
@@ -505,16 +505,6 @@ body.about-route {
   color: var(--ab-terracotta);
   font-family: var(--font-mono, 'JetBrains Mono', monospace);
   font-weight: 800;
-}
-
-.about-diagnosis-cell {
-  white-space: normal;
-  min-width: 280px;
-  max-width: 360px;
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 1.45;
-  color: var(--ab-ink-soft);
 }
 
 .about-home-cta {
