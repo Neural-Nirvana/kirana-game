@@ -1,10 +1,14 @@
-# Shree Shyam Bhandar
+# DukaanBench
 
-Shree Shyam Bhandar is a 30-day Indian kirana shop simulation game. The player runs a small store, reads local signals, buys opening stock, serves customers, manages perishables, handles khata, tries marketing campaigns, and learns from the day-end ledger.
+**DukaanBench** is an AI kirana benchmark: a 30-day Indian shop simulation where humans can play the counter, and frontier models are tested on the same fixed neighborhood world.
 
-The game is built to feel like a serious small-business simulator, not a toy shop game. The core question is simple:
+The fictional test shop is **Shree Shyam Bhandar** on Nehru Colony School Road. One JSON plan per day. Real customers. Real stockouts. Real trust.
+
+The core questions are simple:
 
 > Can you make profit without losing customer trust?
+
+> Can an AI run this kirana for 30 days?
 
 ## Current Status
 

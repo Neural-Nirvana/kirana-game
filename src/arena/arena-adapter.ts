@@ -1,3 +1,5 @@
+import { PRODUCT_NAME } from '../constants/brand';
+import { getMarketingCampaign } from '../constants/marketing';
 import { DEFAULT_CONFIG, PRODUCTS } from '../constants/products';
 import type {
   CustomerOrderLine,
@@ -13,6 +15,7 @@ import type {
   ArenaActionCard,
   ArenaDayMetrics,
   ArenaInventoryTile,
+  ArenaLiveMetrics,
   ArenaReplayDay,
   ArenaReplayEvent,
   ArenaReplayRun,
@@ -66,12 +69,13 @@ function adaptDay(
   const inventory = buildInventoryTiles(log.results.inventoryMovements);
   const rationale = decision?.rationale ?? 'Heuristic replay action generated from current inventory, cash, and demand risks.';
   const validationStatus = decision?.error ? 'fallback' : 'valid';
+  const thoughts = buildThoughts(log, metrics, rationale, validationStatus, decision?.error ?? undefined);
 
   return {
     day: log.day,
     maxDays,
     model: decision?.model ?? 'heuristic-v1',
-    runName: 'AI Arena Replay',
+    runName: `${PRODUCT_NAME} Replay`,
     weather: formatWeather(log.results.environmentContext.weather),
     eventLabel: formatEventLabel(log),
     cash: Math.round(log.results.cash),
@@ -85,12 +89,12 @@ function adaptDay(
     rationale,
     decisionAction: action,
     actionCards: buildActionCards(action),
-    thoughts: buildThoughts(log, metrics, rationale, validationStatus, decision?.error ?? undefined),
+    thoughts,
     metrics,
     rewards: log.results.rewardBreakdown ?? fallbackRewards,
     inventory,
     visits: log.results.customerVisits,
-    events: buildReplayEvents(log, metrics),
+    events: buildReplayEvents(log, metrics, runningScore, action, inventory, thoughts),
   };
 }
 
@@ -260,55 +264,188 @@ function buildThoughts(
   ];
 }
 
-function buildReplayEvents(log: DayLog, metrics: ArenaDayMetrics): ArenaReplayEvent[] {
+function buildPlanningEvents(
+  log: DayLog,
+  liveMetrics: ArenaLiveMetrics,
+  action: PlayerActions,
+  inventory: ArenaInventoryTile[],
+  thoughts: ArenaThoughtLine[]
+): { events: ArenaReplayEvent[]; endAt: number } {
+  const events: ArenaReplayEvent[] = [];
+  let at = 200;
+
+  events.push({
+    type: 'ai_planning_start',
+    at,
+    text: `Planning Day ${log.day} before opening`,
+    severity: 'neutral',
+  });
+  at += 280;
+
+  const env = log.results.environmentContext;
+  const envSignals: Array<{ text: string; severity: ArenaReplayEvent['severity']; productId?: ProductId }> = [
+    { text: `Weather · ${formatWeather(env.weather)}`, severity: 'neutral' },
+    { text: `Event · ${formatEventLabel(log)}`, severity: 'neutral' },
+    { text: `Cash · ${currency(liveMetrics.cash)}`, severity: liveMetrics.cash < 1200 ? 'warn' : 'good' },
+    { text: `Trust · ${liveMetrics.trust}%`, severity: liveMetrics.trust < 55 ? 'warn' : 'good' },
+    { text: `Score · ${signed(liveMetrics.score)}`, severity: 'neutral' },
+  ];
+
+  for (const signal of env.signals.slice(0, 3)) {
+    envSignals.push({ text: `Signal · ${compactSentence(signal, 42)}`, severity: 'neutral' });
+  }
+
+  const riskTiles = inventory.filter((tile) => tile.status !== 'good');
+  const stableTiles = inventory.filter((tile) => tile.status === 'good').slice(0, 2);
+  for (const tile of [...riskTiles, ...stableTiles].slice(0, 5)) {
+    envSignals.push({
+      text: `Shelf · ${tile.name} ${tile.openingShelf} ${tile.unit} (${tile.status})`,
+      severity: tile.status === 'stockout' ? 'bad' : tile.status === 'low' ? 'warn' : 'good',
+      productId: tile.productId,
+    });
+  }
+
+  for (const signal of envSignals) {
+    events.push({
+      type: 'ai_env_review',
+      at,
+      text: signal.text,
+      severity: signal.severity,
+      productId: signal.productId,
+    });
+    at += 340;
+  }
+
+  const observeThought = thoughts.find((thought) => thought.label === 'observe');
+  const decideThought = thoughts.find((thought) => thought.label === 'decide');
+  events.push({
+    type: 'ai_thinking',
+    at,
+    text: observeThought?.text ?? `Reading ${formatWeather(env.weather)} demand and shelf risk.`,
+    severity: 'neutral',
+  });
+  at += 520;
+  events.push({
+    type: 'ai_thinking',
+    at,
+    text: decideThought?.text ?? 'Choosing restock, offers, and marketing for today.',
+    severity: 'good',
+  });
+  at += 560;
+
+  const discounts = objectEntries(action.discounts).filter(([, pct]) => pct > 0);
+  if (discounts.length > 0) {
+    events.push({
+      type: 'ai_env_review',
+      at,
+      text: `Offers · ${discounts.map(([productId, pct]) => `${productLabel(productId)} ${pct}%`).join(', ')}`,
+      severity: 'warn',
+    });
+    at += 360;
+  }
+
+  events.push({
+    type: 'ai_plan_ready',
+    at,
+    text: 'Inventory and marketing plan locked',
+    severity: 'good',
+  });
+  at += 300;
+
+  const orders = objectEntries(action.orders);
+  for (const [productId, quantity] of orders) {
+    events.push({
+      type: 'ai_restock_order',
+      at,
+      productId,
+      productName: productLabel(productId),
+      quantity,
+      text: `Order ${productLabel(productId)} +${quantity}`,
+      severity: 'good',
+    });
+    at += 460;
+  }
+
+  if (orders.length === 0) {
+    events.push({
+      type: 'ai_env_review',
+      at,
+      text: 'Restock · No supplier orders today',
+      severity: 'neutral',
+    });
+    at += 320;
+  }
+
+  for (const selection of action.marketingActions.slice(0, 3)) {
+    const campaign = getMarketingCampaign(selection.specId);
+    events.push({
+      type: 'ai_marketing_launch',
+      at,
+      text: campaign?.name ?? selection.specId,
+      severity: 'good',
+    });
+    at += 420;
+  }
+
+  if (action.marketingActions.length === 0) {
+    events.push({
+      type: 'ai_env_review',
+      at,
+      text: 'Marketing · No campaign launched today',
+      severity: 'neutral',
+    });
+    at += 280;
+  }
+
+  return { events, endAt: at };
+}
+
+function buildReplayEvents(
+  log: DayLog,
+  metrics: ArenaDayMetrics,
+  runningScore: number,
+  action: PlayerActions,
+  inventory: ArenaInventoryTile[],
+  thoughts: ArenaThoughtLine[]
+): ArenaReplayEvent[] {
   const visibleVisits = log.results.customerVisits.slice(0, 12);
+  const openingScore = runningScore - log.results.rewardBreakdown.total;
+  const openingCash = Math.round(log.results.cash - sum(log.results.customerVisits, (visit) => visit.amountPaid));
+  const openingTrust = Math.round(log.results.trust - log.results.trustChange);
+  const liveMetrics: ArenaLiveMetrics = {
+    day: log.day,
+    cash: openingCash,
+    trust: openingTrust,
+    score: openingScore,
+    visits: 0,
+    soldUnits: 0,
+    missedUnits: 0,
+    revenue: 0,
+    khata: 0,
+  };
   const events: ArenaReplayEvent[] = [
     {
       type: 'day_started',
       at: 0,
       text: `Day ${log.day}`,
       severity: 'neutral',
+      liveMetrics: { ...liveMetrics },
     },
     {
       type: 'day_phase',
       at: 120,
       phase: 'morning',
-      text: 'Morning rush',
-      severity: 'neutral',
-    },
-    {
-      type: 'ai_scanned',
-      at: 320,
-      text: `Scanning ${formatWeather(log.results.environmentContext.weather)} demand and opening shelf stock`,
+      text: 'Pre-open planning',
       severity: 'neutral',
     },
   ];
-  let at = 760;
+
+  const planning = buildPlanningEvents(log, liveMetrics, action, inventory, thoughts);
+  events.push(...planning.events);
+  let at = planning.endAt + 240;
   const afternoonIndex = Math.max(1, Math.floor(visibleVisits.length / 3));
   const eveningIndex = Math.max(2, Math.floor((visibleVisits.length * 2) / 3));
   const usedPhases = new Set<ArenaReplayEvent['phase']>(['morning']);
-  const arrived = new Set<number>();
-
-  const pushArrival = (index: number, arrivalAt: number) => {
-    const visit = visibleVisits[index];
-    if (!visit || arrived.has(index)) return;
-    arrived.add(index);
-    events.push({
-      type: 'customer_entered',
-      at: arrivalAt,
-      customerIndex: index,
-      customerName: visit.customerName,
-      segment: visit.segment,
-      text: visit.customerName,
-      severity: 'neutral',
-    });
-  };
-
-  const openingQueue = Math.min(5, visibleVisits.length);
-  for (let index = 0; index < openingQueue; index += 1) {
-    pushArrival(index, at + index * 220);
-  }
-  at += openingQueue * 220 + 460;
 
   for (const [index, visit] of visibleVisits.entries()) {
     if (index === afternoonIndex && !usedPhases.has('afternoon')) {
@@ -335,7 +472,17 @@ function buildReplayEvents(log: DayLog, metrics: ArenaDayMetrics): ArenaReplayEv
       at += 280;
     }
 
-    pushArrival(index, Math.max(760, at - 460));
+    events.push({
+      type: 'customer_entered',
+      at,
+      customerIndex: index,
+      customerName: visit.customerName,
+      segment: visit.segment,
+      text: visit.customerName,
+      severity: 'neutral',
+    });
+
+    at += 360;
 
     events.push({
       type: 'demand_shown',
@@ -346,8 +493,8 @@ function buildReplayEvents(log: DayLog, metrics: ArenaDayMetrics): ArenaReplayEv
       severity: visit.outcome === 'fulfilled' ? 'good' : visit.outcome === 'partial' ? 'warn' : 'bad',
     });
 
-    for (const line of visit.fulfilled.slice(0, 3)) {
-      at += 430;
+    for (const line of visit.fulfilled.slice(0, 4)) {
+      at += 520;
       events.push({
         type: 'item_conveyed',
         at,
@@ -411,7 +558,25 @@ function buildReplayEvents(log: DayLog, metrics: ArenaDayMetrics): ArenaReplayEv
       });
     }
 
-    at += 260;
+    liveMetrics.visits += 1;
+    liveMetrics.soldUnits += sum(visit.fulfilled, (line) => line.quantity);
+    liveMetrics.missedUnits += sum(visit.missed, (line) => line.quantity);
+    liveMetrics.revenue += Math.round(visit.revenue);
+    liveMetrics.khata += Math.round(visit.khataAmount);
+    liveMetrics.cash += Math.round(visit.amountPaid);
+    liveMetrics.trust += Math.round(visit.trustDelta);
+
+    at += 160;
+    events.push({
+      type: 'metrics_changed',
+      at,
+      customerIndex: index,
+      customerName: visit.customerName,
+      severity: visit.outcome === 'fulfilled' ? 'good' : visit.outcome === 'partial' ? 'warn' : 'bad',
+      liveMetrics: { ...liveMetrics },
+    });
+
+    at += 240;
     events.push({
       type: 'customer_exited',
       at,
@@ -421,8 +586,7 @@ function buildReplayEvents(log: DayLog, metrics: ArenaDayMetrics): ArenaReplayEv
       severity: visit.outcome === 'fulfilled' ? 'good' : visit.outcome === 'partial' ? 'warn' : 'bad',
     });
 
-    pushArrival(index + 5, at + 140);
-    at += 180;
+    at += 260;
   }
 
   events.push({
@@ -431,6 +595,17 @@ function buildReplayEvents(log: DayLog, metrics: ArenaDayMetrics): ArenaReplayEv
     amount: log.results.rewardBreakdown.total,
     text: `${signed(log.results.rewardBreakdown.total)} reward`,
     severity: log.results.rewardBreakdown.total >= 0 ? 'good' : 'bad',
+    liveMetrics: {
+      day: log.day,
+      cash: Math.round(log.results.cash),
+      trust: Math.round(log.results.trust),
+      score: runningScore,
+      visits: metrics.visits,
+      soldUnits: metrics.soldUnits,
+      missedUnits: metrics.missedUnits,
+      revenue: metrics.revenue,
+      khata: metrics.khata,
+    },
   });
   events.push({
     type: 'day_complete',

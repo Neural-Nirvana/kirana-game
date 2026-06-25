@@ -187,6 +187,24 @@ app.get('/api/arena/system-prompt', async () => arena.systemPrompt());
 
 app.get('/api/arena/models', async () => arena.models());
 
+app.get('/api/arena/replays', async (request) => {
+  const query = request.query as { status?: string; model?: string; limit?: string } | undefined;
+  return {
+    replays: store.listAiReplaySummaries({
+      status: query?.status,
+      model: query?.model,
+      limit: query?.limit ? Number(query.limit) : undefined,
+    }),
+  };
+});
+
+app.get('/api/arena/scoreboard', async (request) => {
+  const query = request.query as { limit?: string } | undefined;
+  return {
+    rows: store.getArenaScoreboard(query?.limit ? Number(query.limit) : undefined),
+  };
+});
+
 app.post('/api/arena/runs', async (request) => {
   const body = request.body as ArenaStartRequest | undefined;
   return arena.start(body ?? {});
@@ -205,6 +223,11 @@ app.post('/api/arena/max-capability-runs', async (request) => {
 app.get('/api/arena/runs/:arenaId', async (request) => {
   const { arenaId } = request.params as { arenaId: string };
   return arena.get(arenaId);
+});
+
+app.post('/api/arena/runs/:arenaId/resume', async (request) => {
+  const { arenaId } = request.params as { arenaId: string };
+  return arena.resume(arenaId);
 });
 
 app.post('/api/llm-day-context', async (request, reply) => {

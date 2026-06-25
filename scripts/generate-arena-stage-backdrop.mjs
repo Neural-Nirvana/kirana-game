@@ -52,11 +52,19 @@ function drawScene(image) {
   roundRect(image, 154, 24, 454, 326, 20, rgba('#0f2438', 206));
   rect(image, 174, 40, 414, 68, rgba('#1f2937', 188));
   rect(image, 174, 110, 414, 214, rgba('#111827', 142));
-  line(image, 174, 208, 588, 208, 2, rgba('#5eead4', 76));
-  for (let x = 216; x < 570; x += 84) line(image, x, 112, x, 322, 2, rgba('#cbd5e1', 34));
-  for (let x = 210; x < 584; x += 96) {
-    rect(image, x, 336, 48, 7, rgba('#334155'));
-    rect(image, x, 336, 25, 7, rgba('#22c55e'));
+  radialGlow(image, 438, 260, 220, rgba('#38bdf8', 48));
+  ellipse(image, 446, 326, 126, 24, rgba('#38bdf8', 56));
+  ellipse(image, 446, 326, 82, 14, rgba('#22c55e', 52));
+  roundRect(image, 292, 236, 306, 54, 16, rgba('#0f172a', 118));
+  line(image, 184, 302, 314, 302, 8, rgba('#38bdf8', 96));
+  line(image, 298, 286, 318, 302, 8, rgba('#38bdf8', 96));
+  line(image, 298, 318, 318, 302, 8, rgba('#38bdf8', 96));
+  line(image, 468, 302, 584, 302, 8, rgba('#f59e0b', 88));
+  line(image, 566, 286, 586, 302, 8, rgba('#f59e0b', 88));
+  line(image, 566, 318, 586, 302, 8, rgba('#f59e0b', 88));
+  for (let x = 220; x < 562; x += 68) {
+    line(image, x, 146, x + 48, 146, 3, rgba('#5eead4', 64));
+    line(image, x + 12, 174, x + 60, 174, 3, rgba('#fef3c7', 46));
   }
 
   roundRect(image, 622, 42, 330, 308, 24, rgba('#2d173e', 196));

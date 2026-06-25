@@ -5,6 +5,7 @@ import type {
   DayResult,
   MarketingCampaignInstance,
   PlayerActions,
+  ProductId,
   RunObservation,
   SerializedGameState,
   StepRunResponse,
@@ -26,6 +27,8 @@ import {
 } from './marketing-engine';
 
 type PlayerType = 'human' | 'ai';
+type ArenaStatus = 'queued' | 'running' | 'complete' | 'failed';
+type ArenaRunStatus = 'queued' | 'running' | 'complete' | 'failed';
 
 interface GameRunRow {
   id: string;
@@ -54,15 +57,104 @@ interface CampaignRow {
   actual_result_json: string | null;
 }
 
+export interface ArenaRunTraceRecord {
+  day: number;
+  reward: number;
+  cash: number;
+  trust: number;
+  scoreTotal: number;
+  action: PlayerActions;
+  rationale: string;
+  model: string;
+  latencyMs: number;
+  retryCount: number;
+  error?: string;
+}
+
+export interface ArenaRunRecord {
+  runId?: string;
+  model: string;
+  status: ArenaRunStatus;
+  day: number;
+  totalReward: number;
+  finalCash?: number;
+  finalTrust?: number;
+  decisions: ArenaRunTraceRecord[];
+  error?: string;
+  config?: unknown;
+}
+
+export interface ArenaJobRecord {
+  arenaId: string;
+  status: ArenaStatus;
+  mode: 'llm' | 'heuristic';
+  models: string[];
+  maxDays: number;
+  createdAt: string;
+  updatedAt: string;
+  runs: ArenaRunRecord[];
+  error?: string;
+  request?: unknown;
+  config?: unknown;
+}
+
+interface ArenaJobRow {
+  id: string;
+  status: ArenaStatus;
+  mode: 'llm' | 'heuristic';
+  models_json: string;
+  max_days: number;
+  request_json: string;
+  config_json: string;
+  created_at: string;
+  updated_at: string;
+  error: string | null;
+}
+
+interface ArenaJobRunRow {
+  arena_id: string;
+  model: string;
+  status: ArenaRunStatus;
+  day: number;
+  total_reward: number;
+  run_id: string | null;
+  final_cash: number | null;
+  final_trust: number | null;
+  decisions_json: string;
+  config_json: string;
+  error: string | null;
+}
+
+interface AiDecisionMetadata {
+  provider?: string;
+  transport?: string;
+  promptVersion?: string;
+  configSnapshot?: unknown;
+  usage?: unknown;
+  finishReason?: string;
+  responseId?: string;
+  requestJson?: unknown;
+  responseText?: string;
+  emptyContent?: boolean;
+  validationErrorType?: string;
+  retryCount?: number;
+  fallbackUsed?: boolean;
+  seed?: number;
+  worldVersion?: string;
+}
+
 export class RunStore {
   constructor(private readonly db: DatabaseSync) {}
 
   createRun(
     playerType: PlayerType = 'human',
-    options: { playerId?: string; runName?: string } = {}
+    options: { playerId?: string; runName?: string; seed?: number } = {}
   ): RunObservation {
     const now = new Date().toISOString();
     const state = new GameState();
+    if (Number.isFinite(options.seed)) {
+      state.runSeed = Math.round(options.seed as number);
+    }
     const runId = randomUUID();
     this.db.prepare(`
       INSERT INTO game_runs
@@ -171,7 +263,7 @@ export class RunStore {
     const marketingCost = getCampaignCost(newCampaigns);
     const activeEffects = buildMarketingEffects(allCampaigns, state.day);
     const visibleStateBefore = state.getVisibleState();
-    const simulator = new DaySimulator();
+    const simulator = new DaySimulator(this.getSimulationSeed(state));
     state.setActions(actions);
     const result = simulator.simulateDay(state, actions, {
       marketingEffects: activeEffects,
@@ -218,6 +310,11 @@ export class RunStore {
     return this.stepRun(runId, input, { requireUnowned: true });
   }
 
+  private getSimulationSeed(state: GameState): number | undefined {
+    if (!Number.isFinite(state.runSeed)) return undefined;
+    return Math.round((state.runSeed as number) + state.day * 1009 + state.history.length * 7919);
+  }
+
   createAiDecision(params: {
     runId: string;
     aiPlayerId: string;
@@ -228,12 +325,18 @@ export class RunStore {
     model: string;
     latencyMs: number;
     error?: string;
+    metadata?: AiDecisionMetadata;
   }) {
     const observationHash = createHash('sha256').update(json(params.observation)).digest('hex');
     this.db.prepare(`
       INSERT INTO ai_decisions
-      (id, run_id, ai_player_id, day, observation_hash, action_json, rationale, model, latency_ms, cost_estimate, error)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (
+        id, run_id, ai_player_id, day, observation_hash, action_json, rationale, model,
+        latency_ms, cost_estimate, error, provider, transport, prompt_version, config_json,
+        usage_json, finish_reason, response_id, empty_content, validation_error_type,
+        retry_count, fallback_used, seed, world_version
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       randomUUID(),
       params.runId,
@@ -245,7 +348,61 @@ export class RunStore {
       params.model,
       params.latencyMs,
       0,
-      params.error ?? null
+      params.error ?? null,
+      params.metadata?.provider ?? null,
+      params.metadata?.transport ?? null,
+      params.metadata?.promptVersion ?? null,
+      params.metadata?.configSnapshot ? json(params.metadata.configSnapshot) : null,
+      params.metadata?.usage ? json(params.metadata.usage) : null,
+      params.metadata?.finishReason ?? null,
+      params.metadata?.responseId ?? null,
+      params.metadata?.emptyContent ? 1 : 0,
+      params.metadata?.validationErrorType ?? null,
+      params.metadata?.retryCount ?? 0,
+      params.metadata?.fallbackUsed ? 1 : 0,
+      Number.isFinite(params.metadata?.seed) ? params.metadata?.seed : null,
+      params.metadata?.worldVersion ?? null
+    );
+  }
+
+  recordAiProviderResponse(params: {
+    runId?: string;
+    day: number;
+    model: string;
+    provider?: string;
+    transport?: string;
+    responseId?: string;
+    finishReason?: string;
+    usage?: unknown;
+    requestJson?: unknown;
+    responseText?: string;
+    emptyContent?: boolean;
+    errorClass?: string;
+    rawError?: string;
+  }) {
+    this.db.prepare(`
+      INSERT INTO ai_provider_responses
+      (
+        id, run_id, day, model, provider, transport, response_id, finish_reason,
+        usage_json, request_json, response_text, empty_content, error_class, raw_error, created_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      randomUUID(),
+      params.runId ?? null,
+      params.day,
+      params.model,
+      params.provider ?? null,
+      params.transport ?? null,
+      params.responseId ?? null,
+      params.finishReason ?? null,
+      params.usage ? json(params.usage) : null,
+      params.requestJson ? json(params.requestJson) : null,
+      params.responseText ?? null,
+      params.emptyContent ? 1 : 0,
+      params.errorClass ?? null,
+      params.rawError ?? null,
+      new Date().toISOString()
     );
   }
 
@@ -258,7 +415,10 @@ export class RunStore {
 
   getAiDecisions(runId: string) {
     return this.db.prepare(`
-      SELECT day, observation_hash, action_json, rationale, model, latency_ms, cost_estimate, error
+      SELECT
+        day, observation_hash, action_json, rationale, model, latency_ms, cost_estimate, error,
+        provider, transport, prompt_version, config_json, usage_json, finish_reason, response_id,
+        empty_content, validation_error_type, retry_count, fallback_used, seed, world_version
       FROM ai_decisions
       WHERE run_id = ?
       ORDER BY day ASC, rowid ASC
@@ -272,6 +432,19 @@ export class RunStore {
         latency_ms: number;
         cost_estimate: number;
         error: string | null;
+        provider: string | null;
+        transport: string | null;
+        prompt_version: string | null;
+        config_json: string | null;
+        usage_json: string | null;
+        finish_reason: string | null;
+        response_id: string | null;
+        empty_content: number;
+        validation_error_type: string | null;
+        retry_count: number;
+        fallback_used: number;
+        seed: number | null;
+        world_version: string | null;
       };
       return {
         day: decision.day,
@@ -282,6 +455,19 @@ export class RunStore {
         latencyMs: decision.latency_ms,
         costEstimate: decision.cost_estimate,
         error: decision.error,
+        provider: decision.provider ?? undefined,
+        transport: decision.transport ?? undefined,
+        promptVersion: decision.prompt_version ?? undefined,
+        configSnapshot: decision.config_json ? parseJson(decision.config_json) : undefined,
+        usage: decision.usage_json ? parseJson(decision.usage_json) : undefined,
+        finishReason: decision.finish_reason ?? undefined,
+        responseId: decision.response_id ?? undefined,
+        emptyContent: Boolean(decision.empty_content),
+        validationErrorType: decision.validation_error_type ?? undefined,
+        retryCount: decision.retry_count,
+        fallbackUsed: Boolean(decision.fallback_used),
+        seed: decision.seed ?? undefined,
+        worldVersion: decision.world_version ?? undefined,
       };
     });
   }
@@ -293,6 +479,268 @@ export class RunStore {
       VALUES (?, ?, ?, ?, ?, ?)
     `).run(id, runId, name, model, json(profile), new Date().toISOString());
     return id;
+  }
+
+  getOrCreateAiPlayer(runId: string, name: string, model: string, profile: unknown): string {
+    const row = this.db.prepare(`
+      SELECT id FROM ai_players WHERE run_id = ? AND model = ? ORDER BY rowid ASC LIMIT 1
+    `).get(runId, model) as { id: string } | undefined;
+    return row?.id ?? this.createAiPlayer(runId, name, model, profile);
+  }
+
+  listAiReplaySummaries(options: { limit?: number; status?: string; model?: string } = {}) {
+    const limit = options.limit ?? 50;
+    const filters = ['game_runs.player_type = ?'];
+    const args: unknown[] = ['ai'];
+    if (options.status) {
+      filters.push('game_runs.status = ?');
+      args.push(options.status);
+    }
+    if (options.model) {
+      filters.push('ai_players.model = ?');
+      args.push(options.model);
+    }
+    const rows = this.db.prepare(`
+      SELECT
+        game_runs.id AS run_id,
+        ai_players.model AS model,
+        game_runs.status AS status,
+        game_runs.total_score AS score,
+        game_runs.state_json AS state_json,
+        game_runs.updated_at AS saved_at,
+        COUNT(day_results.day) AS days_completed
+      FROM game_runs
+      JOIN ai_players ON ai_players.run_id = game_runs.id
+      LEFT JOIN day_results ON day_results.run_id = game_runs.id
+      WHERE ${filters.join(' AND ')}
+      GROUP BY game_runs.id, ai_players.model
+      ORDER BY days_completed DESC, game_runs.updated_at DESC
+      LIMIT ?
+    `).all(...args, limit) as Array<{
+      run_id: string;
+      model: string;
+      status: string;
+      score: number;
+      state_json: string;
+      saved_at: string;
+      days_completed: number;
+    }>;
+
+    return rows.map((row) => {
+      const state = GameState.fromSerialized(parseJson<SerializedGameState>(row.state_json));
+      return {
+        runId: row.run_id,
+        model: row.model,
+        status: row.status,
+        daysCompleted: row.days_completed,
+        score: row.score,
+        finalCash: Math.round(state.cash),
+        finalTrust: Math.round(state.trust),
+        savedAt: row.saved_at,
+      };
+    });
+  }
+
+  createArenaJob(job: ArenaJobRecord) {
+    const now = new Date().toISOString();
+    this.db.prepare(`
+      INSERT INTO arena_jobs
+      (id, status, mode, models_json, max_days, request_json, config_json, created_at, updated_at, error)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      job.arenaId,
+      job.status,
+      job.mode,
+      json(job.models),
+      job.maxDays,
+      json(job.request ?? {}),
+      json(job.config ?? {}),
+      job.createdAt || now,
+      job.updatedAt || now,
+      job.error ?? null
+    );
+
+    for (const run of job.runs) {
+      this.upsertArenaJobRun(job.arenaId, run);
+    }
+  }
+
+  updateArenaJob(job: ArenaJobRecord) {
+    const now = new Date().toISOString();
+    this.db.prepare(`
+      UPDATE arena_jobs
+      SET status = ?, mode = ?, models_json = ?, max_days = ?, request_json = ?, config_json = ?, updated_at = ?, error = ?
+      WHERE id = ?
+    `).run(
+      job.status,
+      job.mode,
+      json(job.models),
+      job.maxDays,
+      json(job.request ?? {}),
+      json(job.config ?? {}),
+      now,
+      job.error ?? null,
+      job.arenaId
+    );
+    for (const run of job.runs) {
+      this.upsertArenaJobRun(job.arenaId, run);
+    }
+  }
+
+  upsertArenaJobRun(arenaId: string, run: ArenaRunRecord) {
+    const now = new Date().toISOString();
+    this.db.prepare(`
+      INSERT INTO arena_job_runs
+      (id, arena_id, model, status, day, total_reward, run_id, final_cash, final_trust, decisions_json, config_json, created_at, updated_at, error)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(arena_id, model) DO UPDATE SET
+        status = excluded.status,
+        day = excluded.day,
+        total_reward = excluded.total_reward,
+        run_id = excluded.run_id,
+        final_cash = excluded.final_cash,
+        final_trust = excluded.final_trust,
+        decisions_json = excluded.decisions_json,
+        config_json = excluded.config_json,
+        updated_at = excluded.updated_at,
+        error = excluded.error
+    `).run(
+      randomUUID(),
+      arenaId,
+      run.model,
+      run.status,
+      run.day,
+      run.totalReward,
+      run.runId ?? null,
+      run.finalCash ?? null,
+      run.finalTrust ?? null,
+      json(run.decisions),
+      json(run.config ?? {}),
+      now,
+      now,
+      run.error ?? null
+    );
+  }
+
+  getArenaJob(arenaId: string): ArenaJobRecord {
+    const row = this.db.prepare('SELECT * FROM arena_jobs WHERE id = ?').get(arenaId) as ArenaJobRow | undefined;
+    if (!row) throw new Error(`Arena run not found: ${arenaId}`);
+    const runs = this.db.prepare(`
+      SELECT * FROM arena_job_runs WHERE arena_id = ? ORDER BY rowid ASC
+    `).all(arenaId) as ArenaJobRunRow[];
+
+    return {
+      arenaId: row.id,
+      status: row.status,
+      mode: row.mode,
+      models: parseJson<string[]>(row.models_json),
+      maxDays: row.max_days,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+      error: row.error ?? undefined,
+      request: parseJson(row.request_json),
+      config: parseJson(row.config_json),
+      runs: runs.map((run) => ({
+        model: run.model,
+        status: run.status,
+        day: run.day,
+        totalReward: run.total_reward,
+        runId: run.run_id ?? undefined,
+        finalCash: run.final_cash ?? undefined,
+        finalTrust: run.final_trust ?? undefined,
+        decisions: parseJson<ArenaRunTraceRecord[]>(run.decisions_json),
+        config: parseJson(run.config_json),
+        error: run.error ?? undefined,
+      })),
+    };
+  }
+
+  getArenaScoreboard(limit = 25) {
+    const replays = this.listAiReplaySummaries({ status: 'complete', limit });
+    return replays.map((replay) => {
+      const timeline = this.getTimeline(replay.runId);
+      const decisions = this.getAiDecisions(replay.runId);
+      const totals = this.summarizeTimeline(timeline);
+      return {
+        runId: replay.runId,
+        model: replay.model,
+        score: replay.score,
+        finalCash: replay.finalCash ?? 0,
+        finalTrust: replay.finalTrust ?? 0,
+        daysCompleted: replay.daysCompleted,
+        savedAt: replay.savedAt,
+        ...totals,
+        retries: decisions.reduce((sum, decision) => sum + (decision.retryCount ?? 0), 0),
+        fallbacks: decisions.filter((decision) => decision.fallbackUsed || decision.rationale.startsWith('Fallback after')).length,
+        errors: decisions.filter((decision) => decision.error).length,
+        averageLatencyMs: decisions.length > 0
+          ? Math.round(decisions.reduce((sum, decision) => sum + decision.latencyMs, 0) / decisions.length)
+          : 0,
+      };
+    });
+  }
+
+  private summarizeTimeline(timeline: DayLog[]) {
+    const productDemand: Partial<Record<ProductId, { sold: number; missed: number }>> = {};
+    let profit = 0;
+    let revenue = 0;
+    let soldUnits = 0;
+    let missedUnits = 0;
+    let wasteLoss = 0;
+    let stockoutDays = 0;
+    let stockoutIncidents = 0;
+    let marketingSpend = 0;
+    let marketingScore = 0;
+    let marketingMargin = 0;
+    let marketingMissedUnits = 0;
+    let marketingActiveDays = 0;
+
+    for (const log of timeline) {
+      const result = log.results;
+      profit += result.profit;
+      wasteLoss += result.wasteLoss;
+      if (result.stockouts > 0) stockoutDays += 1;
+      stockoutIncidents += result.stockouts;
+      marketingSpend += result.marketingPerformance.spendToday;
+      marketingScore += result.marketingPerformance.score;
+      marketingMargin += result.marketingPerformance.targetGrossMargin;
+      marketingMissedUnits += result.marketingPerformance.missedTargetUnits;
+      if (result.marketingPerformance.activeCampaigns > 0) marketingActiveDays += 1;
+      for (const visit of result.customerVisits) {
+        revenue += visit.revenue;
+      }
+      for (const movement of result.inventoryMovements) {
+        soldUnits += movement.sold;
+        missedUnits += movement.missedDemand;
+        productDemand[movement.productId] ??= { sold: 0, missed: 0 };
+        productDemand[movement.productId]!.sold += movement.sold;
+        productDemand[movement.productId]!.missed += movement.missedDemand;
+      }
+    }
+
+    return {
+      profit: Math.round(profit),
+      revenue: Math.round(revenue),
+      soldUnits,
+      missedUnits,
+      serviceRate: soldUnits + missedUnits > 0 ? soldUnits / (soldUnits + missedUnits) : 1,
+      wasteLoss: Math.round(wasteLoss),
+      stockoutDays,
+      stockoutIncidents,
+      marketingSpend: Math.round(marketingSpend),
+      marketingScore,
+      marketingMargin: Math.round(marketingMargin),
+      marketingMissedUnits,
+      marketingActiveDays,
+      marketingRoi: marketingSpend > 0 ? marketingMargin / marketingSpend : 0,
+      productServiceRates: Object.fromEntries(
+        PRODUCTS.map((product) => {
+          const totals = productDemand[product.id] ?? { sold: 0, missed: 0 };
+          const demand = totals.sold + totals.missed;
+          return [product.id, demand > 0 ? totals.sold / demand : 1];
+        })
+      ),
+    };
   }
 
   private validateActions(state: GameState, actions: PlayerActions): string[] {

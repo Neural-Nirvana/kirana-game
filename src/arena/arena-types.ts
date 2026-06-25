@@ -12,6 +12,12 @@ export type ArenaReplayEventType =
   | 'day_started'
   | 'day_phase'
   | 'ai_scanned'
+  | 'ai_planning_start'
+  | 'ai_env_review'
+  | 'ai_thinking'
+  | 'ai_plan_ready'
+  | 'ai_restock_order'
+  | 'ai_marketing_launch'
   | 'customer_entered'
   | 'demand_shown'
   | 'item_conveyed'
@@ -20,6 +26,7 @@ export type ArenaReplayEventType =
   | 'stockout_missed'
   | 'trust_changed'
   | 'customer_exited'
+  | 'metrics_changed'
   | 'reward_updated'
   | 'day_complete';
 
@@ -32,6 +39,19 @@ export interface AiDecisionRecord {
   latencyMs: number;
   costEstimate: number;
   error?: string | null;
+  provider?: string;
+  transport?: string;
+  promptVersion?: string;
+  configSnapshot?: unknown;
+  usage?: unknown;
+  finishReason?: string;
+  responseId?: string;
+  emptyContent?: boolean;
+  validationErrorType?: string;
+  retryCount?: number;
+  fallbackUsed?: boolean;
+  seed?: number;
+  worldVersion?: string;
 }
 
 export interface AiReplayResponse {
@@ -68,6 +88,52 @@ export interface ArenaModelsResponse {
   note: string;
 }
 
+export interface ArenaReplaySummary {
+  runId: string;
+  model: string;
+  status: string;
+  daysCompleted: number;
+  score: number;
+  finalCash?: number;
+  finalTrust?: number;
+  savedAt: string;
+}
+
+export interface ArenaReplayIndexResponse {
+  replays: ArenaReplaySummary[];
+}
+
+export interface ArenaScoreboardResponse {
+  rows: Array<{
+    runId: string;
+    model: string;
+    score: number;
+    finalCash: number;
+    finalTrust: number;
+    daysCompleted: number;
+    savedAt: string;
+    profit: number;
+    revenue: number;
+    soldUnits: number;
+    missedUnits: number;
+    serviceRate: number;
+    wasteLoss: number;
+    stockoutDays: number;
+    stockoutIncidents: number;
+    marketingSpend: number;
+    marketingScore: number;
+    marketingMargin: number;
+    marketingMissedUnits: number;
+    marketingActiveDays: number;
+    marketingRoi: number;
+    retries: number;
+    fallbacks: number;
+    errors: number;
+    averageLatencyMs: number;
+    productServiceRates: Partial<Record<ProductId, number>>;
+  }>;
+}
+
 export interface ArenaDayTrace {
   day: number;
   reward: number;
@@ -80,6 +146,7 @@ export interface ArenaDayTrace {
   latencyMs: number;
   retryCount: number;
   error?: string;
+  metadata?: unknown;
 }
 
 export interface ArenaRunSummary {
@@ -92,6 +159,7 @@ export interface ArenaRunSummary {
   finalTrust?: number;
   decisions: ArenaDayTrace[];
   error?: string;
+  config?: unknown;
 }
 
 export interface ArenaJobResponse {
@@ -104,6 +172,8 @@ export interface ArenaJobResponse {
   updatedAt: string;
   runs: ArenaRunSummary[];
   error?: string;
+  request?: unknown;
+  config?: unknown;
 }
 
 export interface ArenaReplayEvent {
@@ -120,6 +190,19 @@ export interface ArenaReplayEvent {
   phase?: 'morning' | 'afternoon' | 'evening';
   text?: string;
   severity?: 'good' | 'warn' | 'bad' | 'neutral';
+  liveMetrics?: ArenaLiveMetrics;
+}
+
+export interface ArenaLiveMetrics {
+  day: number;
+  cash: number;
+  trust: number;
+  score: number;
+  visits: number;
+  soldUnits: number;
+  missedUnits: number;
+  revenue: number;
+  khata: number;
 }
 
 export interface ArenaInventoryTile {

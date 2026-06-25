@@ -7,20 +7,32 @@ import type {
   ProductId,
   RunObservation,
 } from '../src/types';
+import { PRODUCT_NAME, SHOP_NAME } from '../src/constants/brand';
 import { DEFAULT_CONFIG, PRODUCTS } from '../src/constants/products';
+import { DEFAULT_NEIGHBORHOOD_PROFILE } from '../src/constants/neighborhood';
 import { GameState } from '../src/game/GameState';
 import { PerishabilityEngine } from '../src/game/PerishabilityEngine';
 import { EnvironmentSignalEngine } from '../src/game/progression/EnvironmentSignalEngine';
 import { getAvailableCampaigns, normalizeActions } from './marketing-engine';
-import type { RunStore } from './run-store';
+import type { ArenaJobRecord, ArenaRunRecord, RunStore } from './run-store';
 
 const PRODUCT_IDS = PRODUCTS.map((product) => product.id);
 const DISCOUNT_OPTIONS = [0, 10, 15, 20];
 const DEFAULT_ARENA_MODELS = ['z-ai/glm-5.2'];
 const DEEPSEEK_FLASH_MODEL = 'deepseek/deepseek-v4-flash';
+const DEEPSEEK_PRO_MODEL = 'deepseek/deepseek-v4-pro';
+const GPT_55_MODEL = 'openai/gpt-5.5';
+const GPT_54_MINI_MODEL = 'openai/gpt-5.4-mini';
+const GEMINI_31_PRO_MODEL = 'google/gemini-3.1-pro-preview';
+const GROK_43_MODEL = 'x-ai/grok-4.3';
+const CLAUDE_OPUS_48_MODEL = 'anthropic/claude-opus-4.8';
+const SARVAM_105B_MODEL = 'sarvam-105b';
 const MAX_CAPABILITY_PROFILE = 'max_capability';
 const MAX_CAPABILITY_TOKENS = 16000;
 const MAX_CAPABILITY_TIMEOUT_MS = 900000;
+const AI_ARENA_PROMPT_VERSION = 'arena-prompt-v2-world-context';
+const AI_ARENA_WORLD_VERSION = DEFAULT_NEIGHBORHOOD_PROFILE.id;
+const DEFAULT_ARENA_SEED = 20260624;
 
 export const AI_ARENA_SYSTEM_PROMPT = [
   'You are an autonomous AI shopkeeper playing Shree Shyam Bhandar, an Indian kirana store simulation.',
@@ -36,6 +48,8 @@ export const AI_ARENA_SYSTEM_PROMPT = [
   'Khata example: "khataReminders":["mrs_sharma","office_regular"]. Discount example: "discounts":{"bananas":15}. Use numbers only: 10, 15, or 20; do not write "10%" strings.',
   'Use the word discount only when action.discounts has a positive number for that item. Use the word campaign or marketing for marketingActions instead of calling campaigns discounts.',
   'Use the environment signals to infer demand pressure. Do not ask for hidden demand forecasts. Do not invent products, campaigns, or customers.',
+  'Historical baseline demand is only a reference, not tomorrow demand. Prioritize recent sold/missed history, known customers, weather, weekday, events, marketing, and trust.',
+  'Every Arena run uses the same fixed fictional neighborhood profile. Use nearby societies, school traffic, commute flow, and segment behavior to reason about visits and demand.',
   'Return only JSON matching the schema: { "action": PlayerActions, "rationale": string }. No markdown.',
 ].join(' ');
 
@@ -51,6 +65,24 @@ const productQuantityMapSchema = {
   type: 'object',
   additionalProperties: false,
   properties: productNumberProperties,
+};
+
+const strictProductNumberProperties = Object.fromEntries(
+  PRODUCT_IDS.map((productId) => [productId, { type: 'integer' }])
+);
+
+const strictProductQuantityMapSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: PRODUCT_IDS,
+  properties: strictProductNumberProperties,
+};
+
+const strictProductDiscountMapSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: PRODUCT_IDS,
+  properties: productDiscountProperties,
 };
 
 export const AI_ARENA_ACTION_SCHEMA = {
@@ -124,7 +156,94 @@ export const AI_ARENA_RESPONSE_SCHEMA = {
   },
 };
 
+const AI_ARENA_OPENAI_RESPONSES_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['action', 'rationale'],
+  properties: {
+    action: {
+      type: 'object',
+      additionalProperties: false,
+      required: [
+        'orders',
+        'removals',
+        'discounts',
+        'khataReminders',
+        'marketingActions',
+        'cashReserve',
+        'fridgeAllocation',
+      ],
+      properties: {
+        orders: strictProductQuantityMapSchema,
+        removals: strictProductQuantityMapSchema,
+        discounts: strictProductDiscountMapSchema,
+        khataReminders: {
+          type: 'array',
+          items: { type: 'string' },
+        },
+        marketingActions: {
+          type: 'array',
+          items: {
+            type: 'object',
+            additionalProperties: false,
+            required: ['specId', 'targetProducts'],
+            properties: {
+              specId: { type: 'string' },
+              targetProducts: {
+                type: 'array',
+                items: { type: 'string', enum: PRODUCT_IDS },
+              },
+            },
+          },
+        },
+        cashReserve: { type: 'integer' },
+        fridgeAllocation: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['milk', 'cold_drinks', 'buffer'],
+          properties: {
+            milk: { type: 'integer' },
+            cold_drinks: { type: 'integer' },
+            buffer: { type: 'integer' },
+          },
+        },
+      },
+    },
+    rationale: { type: 'string' },
+  },
+};
+
 export const AI_ARENA_MODEL_PRESETS = [
+  {
+    id: GPT_55_MODEL,
+    label: 'GPT 5.5',
+    note: 'Strong OpenAI reasoning baseline. Uses OpenRouter Responses API.',
+  },
+  {
+    id: GPT_54_MINI_MODEL,
+    label: 'GPT 5.4 Mini',
+    note: 'OpenAI text model for low-latency kirana decisions.',
+  },
+  {
+    id: GEMINI_31_PRO_MODEL,
+    label: 'Gemini 3.1 Pro',
+    note: 'High-reasoning Gemini candidate. Uses OpenRouter Responses in max runs.',
+  },
+  {
+    id: GROK_43_MODEL,
+    label: 'Grok 4.3',
+    note: 'xAI high-reasoning candidate. Uses Responses JSON-object in max runs.',
+  },
+  {
+    id: CLAUDE_OPUS_48_MODEL,
+    label: 'Claude Opus 4.8',
+    note: 'Premium Anthropic reasoning model. Use controlled smoke runs before full benchmarks.',
+  },
+  {
+    id: SARVAM_105B_MODEL,
+    label: 'Sarvam 105B',
+    note: 'Sarvam flagship Indian-language reasoning model. Uses Sarvam API key and max reasoning.',
+  },
   {
     id: 'z-ai/glm-5.2',
     label: 'GLM 5.2',
@@ -148,6 +267,7 @@ export type ArenaRunStatus = 'queued' | 'running' | 'complete' | 'failed';
 export type ArenaObservationMode = 'full' | 'compact';
 export type ArenaResponseMode = 'json_schema' | 'json_object' | 'text';
 export type ArenaReasoningMode = 'off' | 'medium' | 'high' | 'xhigh';
+export type ArenaTransportMode = 'auto' | 'chat_completions' | 'responses';
 
 export interface ArenaStartRequest {
   models?: string[];
@@ -160,8 +280,10 @@ export interface ArenaStartRequest {
   observationMode?: ArenaObservationMode;
   responseMode?: ArenaResponseMode;
   reasoning?: ArenaReasoningMode;
+  transport?: ArenaTransportMode;
   timeoutMs?: number;
   maxTokens?: number;
+  seed?: number;
 }
 
 export interface ArenaDayTrace {
@@ -176,6 +298,7 @@ export interface ArenaDayTrace {
   latencyMs: number;
   retryCount: number;
   error?: string;
+  metadata?: ArenaDecisionMetadata;
 }
 
 export interface ArenaRunSummary {
@@ -188,6 +311,7 @@ export interface ArenaRunSummary {
   finalTrust?: number;
   decisions: ArenaDayTrace[];
   error?: string;
+  config?: unknown;
 }
 
 export interface ArenaJob {
@@ -200,16 +324,37 @@ export interface ArenaJob {
   updatedAt: string;
   runs: ArenaRunSummary[];
   error?: string;
+  request?: ArenaStartRequest;
+  config?: unknown;
+}
+
+interface ArenaDecisionMetadata {
+  provider: string;
+  transport: string;
+  promptVersion: string;
+  configSnapshot: unknown;
+  usage?: unknown;
+  finishReason?: string;
+  responseId?: string;
+  requestJson?: unknown;
+  responseText?: string;
+  emptyContent?: boolean;
+  validationErrorType?: string;
+  retryCount?: number;
+  fallbackUsed?: boolean;
+  seed?: number;
+  worldVersion: string;
 }
 
 export function createAiArena(params: { store: RunStore }) {
-  const jobs = new Map<string, ArenaJob>();
+  const runningJobs = new Set<string>();
 
   return {
     start(request: ArenaStartRequest = {}) {
       const mode = request.mode ?? 'llm';
       const models = normalizeModelList(request.models, mode);
       const maxDays = clampInteger(request.maxDays, 1, DEFAULT_CONFIG.maxDays, DEFAULT_CONFIG.maxDays);
+      const seed = getArenaSeed(request);
       const job: ArenaJob = {
         arenaId: randomUUID(),
         status: 'queued',
@@ -218,23 +363,27 @@ export function createAiArena(params: { store: RunStore }) {
         maxDays,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
+        request: { ...request, mode, models, maxDays, seed },
+        config: buildArenaJobConfig({ ...request, mode, models, maxDays, seed }),
         runs: models.map((model) => ({
           model,
           status: 'queued',
           day: 1,
           totalReward: 0,
           decisions: [],
+          config: buildArenaRunConfig({ ...request, mode, models, maxDays, seed }, model),
         })),
       };
-      jobs.set(job.arenaId, job);
+      params.store.createArenaJob(toArenaJobRecord(job));
 
-      void runArenaJob(params.store, job, request).catch((error) => {
+      void runArenaJob(params.store, job, job.request, runningJobs).catch((error) => {
         job.status = 'failed';
         job.error = error instanceof Error ? error.message : String(error);
         job.updatedAt = new Date().toISOString();
+        params.store.updateArenaJob(toArenaJobRecord(job));
       });
 
-      return job;
+      return params.store.getArenaJob(job.arenaId);
     },
 
     startDeepSeekFlash(request: Omit<ArenaStartRequest, 'models' | 'mode'> = {}) {
@@ -268,9 +417,27 @@ export function createAiArena(params: { store: RunStore }) {
     },
 
     get(arenaId: string) {
-      const job = jobs.get(arenaId);
-      if (!job) throw new Error(`Arena run not found: ${arenaId}`);
-      return job;
+      return params.store.getArenaJob(arenaId);
+    },
+
+    resume(arenaId: string) {
+      const job = fromArenaJobRecord(params.store.getArenaJob(arenaId));
+      if (job.status === 'complete') return job;
+      if (runningJobs.has(arenaId)) return params.store.getArenaJob(arenaId);
+
+      job.status = 'queued';
+      job.error = undefined;
+      job.updatedAt = new Date().toISOString();
+      params.store.updateArenaJob(toArenaJobRecord(job));
+
+      void runArenaJob(params.store, job, job.request ?? {}, runningJobs).catch((error) => {
+        job.status = 'failed';
+        job.error = error instanceof Error ? error.message : String(error);
+        job.updatedAt = new Date().toISOString();
+        params.store.updateArenaJob(toArenaJobRecord(job));
+      });
+
+      return params.store.getArenaJob(arenaId);
     },
 
     async models() {
@@ -293,26 +460,226 @@ export function createAiArena(params: { store: RunStore }) {
   };
 }
 
-async function runArenaJob(store: RunStore, job: ArenaJob, request: ArenaStartRequest) {
+function toArenaJobRecord(job: ArenaJob): ArenaJobRecord {
+  return {
+    arenaId: job.arenaId,
+    status: job.status,
+    mode: job.mode,
+    models: job.models,
+    maxDays: job.maxDays,
+    createdAt: job.createdAt,
+    updatedAt: job.updatedAt,
+    runs: job.runs as ArenaRunRecord[],
+    error: job.error,
+    request: job.request ?? {},
+    config: job.config ?? {},
+  };
+}
+
+function fromArenaJobRecord(record: ArenaJobRecord): ArenaJob {
+  return {
+    arenaId: record.arenaId,
+    status: record.status,
+    mode: record.mode,
+    models: record.models,
+    maxDays: record.maxDays,
+    createdAt: record.createdAt,
+    updatedAt: record.updatedAt,
+    runs: record.runs as ArenaRunSummary[],
+    error: record.error,
+    request: record.request as ArenaStartRequest,
+    config: record.config,
+  };
+}
+
+function getArenaSeed(request: ArenaStartRequest): number {
+  return Number.isFinite(request.seed) ? Math.round(request.seed as number) : DEFAULT_ARENA_SEED;
+}
+
+function buildArenaJobConfig(request: ArenaStartRequest) {
+  return {
+    promptVersion: AI_ARENA_PROMPT_VERSION,
+    worldVersion: AI_ARENA_WORLD_VERSION,
+    seed: getArenaSeed(request),
+    maxDays: request.maxDays ?? DEFAULT_CONFIG.maxDays,
+    models: request.models ?? [],
+    mode: request.mode ?? 'llm',
+  };
+}
+
+function buildArenaRunConfig(request: ArenaStartRequest, model: string) {
+  const transportMode = getTransportMode(request, model);
+  return {
+    provider: providerForModel(model, request.mode),
+    transport: transportForModel(model, getResponseMode(request, model), transportMode),
+    promptVersion: AI_ARENA_PROMPT_VERSION,
+    worldVersion: AI_ARENA_WORLD_VERSION,
+    seed: getArenaSeed(request),
+    profile: request.profile ?? 'balanced',
+    observationMode: getObservationMode(request, model),
+    responseMode: getResponseMode(request, model),
+    reasoning: getReasoningMode(request, model),
+    transportMode,
+    requireJsonSchema: getRequireJsonSchema(request, model),
+    requireParameters: getRequireParameters(request, model),
+    maxTokens: getMaxTokens(request, model),
+    timeoutMs: getTimeoutMs(request, model),
+    temperature: request.temperature ?? 0.15,
+  };
+}
+
+function buildDecisionMetadata(
+  request: ArenaStartRequest | {
+    mode?: ArenaMode;
+    profile?: string;
+    observationMode: ArenaObservationMode;
+    responseMode: ArenaResponseMode;
+    reasoning: ArenaReasoningMode;
+    transport?: ArenaTransportMode;
+    requireJsonSchema?: boolean;
+    requireParameters?: boolean;
+    timeoutMs: number;
+    maxTokens: number;
+    temperature?: number;
+    seed?: number;
+  },
+  model: string,
+  overrides: Partial<ArenaDecisionMetadata> = {}
+): ArenaDecisionMetadata {
+  const configSnapshot = buildArenaRunConfig(request as ArenaStartRequest, model);
+  return {
+    provider: overrides.provider ?? providerForModel(model, request.mode),
+    transport: overrides.transport ?? transportForModel(model, request.responseMode, request.transport),
+    promptVersion: AI_ARENA_PROMPT_VERSION,
+    configSnapshot,
+    usage: overrides.usage,
+    finishReason: overrides.finishReason,
+    responseId: overrides.responseId,
+    requestJson: overrides.requestJson,
+    responseText: overrides.responseText,
+    emptyContent: overrides.emptyContent ?? false,
+    validationErrorType: overrides.validationErrorType,
+    retryCount: overrides.retryCount ?? 0,
+    fallbackUsed: overrides.fallbackUsed ?? false,
+    seed: overrides.seed ?? getArenaSeed(request as ArenaStartRequest),
+    worldVersion: AI_ARENA_WORLD_VERSION,
+  };
+}
+
+function withDecisionMetadata(
+  metadata: ArenaDecisionMetadata | undefined,
+  request: ArenaStartRequest,
+  model: string,
+  retryCount: number,
+  error?: string
+): ArenaDecisionMetadata {
+  return {
+    ...(metadata ?? buildDecisionMetadata(request, model)),
+    retryCount,
+    validationErrorType: error ? classifyArenaError(error) : metadata?.validationErrorType,
+    emptyContent: metadata?.emptyContent ?? Boolean(error && /no .*content|no output text/i.test(error)),
+  };
+}
+
+function classifyArenaError(error: string): string {
+  if (/json|schema|parse/i.test(error)) return 'json';
+  if (/content|output text|empty/i.test(error)) return 'empty_content';
+  if (/timeout|abort/i.test(error)) return 'timeout';
+  if (/rationale|action|marketing|discount|khata/i.test(error)) return 'validation';
+  return 'provider';
+}
+
+function mergePersistedDecisions(
+  current: ArenaDayTrace[],
+  persisted: Array<{
+    day: number;
+    action: PlayerActions;
+    rationale: string;
+    model: string;
+    latencyMs: number;
+    error?: string | null;
+    retryCount?: number;
+    fallbackUsed?: boolean;
+    provider?: string;
+    transport?: string;
+    promptVersion?: string;
+    configSnapshot?: unknown;
+    usage?: unknown;
+    finishReason?: string;
+    responseId?: string;
+    emptyContent?: boolean;
+    validationErrorType?: string;
+    seed?: number;
+    worldVersion?: string;
+  }>,
+  model: string
+): ArenaDayTrace[] {
+  const byDay = new Map<number, ArenaDayTrace>();
+  for (const trace of current) byDay.set(trace.day, trace);
+  for (const decision of persisted.filter((item) => item.model === model)) {
+    if (byDay.has(decision.day)) continue;
+    byDay.set(decision.day, {
+      day: decision.day,
+      reward: 0,
+      cash: 0,
+      trust: 0,
+      scoreTotal: 0,
+      action: decision.action,
+      rationale: decision.rationale,
+      model: decision.model,
+      latencyMs: decision.latencyMs,
+      retryCount: decision.retryCount ?? 0,
+      error: decision.error ?? undefined,
+      metadata: decision.provider ? {
+        provider: decision.provider,
+        transport: decision.transport ?? 'unknown',
+        promptVersion: decision.promptVersion ?? AI_ARENA_PROMPT_VERSION,
+        configSnapshot: decision.configSnapshot ?? {},
+        usage: decision.usage,
+        finishReason: decision.finishReason,
+        responseId: decision.responseId,
+        emptyContent: decision.emptyContent,
+        validationErrorType: decision.validationErrorType,
+        retryCount: decision.retryCount ?? 0,
+        fallbackUsed: decision.fallbackUsed ?? false,
+        seed: decision.seed,
+        worldVersion: decision.worldVersion ?? AI_ARENA_WORLD_VERSION,
+      } : undefined,
+    });
+  }
+  return Array.from(byDay.values()).sort((a, b) => a.day - b.day);
+}
+
+async function runArenaJob(store: RunStore, job: ArenaJob, request: ArenaStartRequest, runningJobs: Set<string>) {
+  runningJobs.add(job.arenaId);
   job.status = 'running';
   job.updatedAt = new Date().toISOString();
+  store.updateArenaJob(toArenaJobRecord(job));
 
-  await Promise.all(job.runs.map(async (runSummary) => {
-    runSummary.status = 'running';
-    job.updatedAt = new Date().toISOString();
-    try {
-      await runSingleArenaModel(store, job, runSummary, request);
-      runSummary.status = 'complete';
-    } catch (error) {
-      runSummary.status = 'failed';
-      runSummary.error = error instanceof Error ? error.message : String(error);
-    } finally {
+  try {
+    await Promise.all(job.runs.map(async (runSummary) => {
+      if (runSummary.status === 'complete') return;
+      runSummary.status = 'running';
       job.updatedAt = new Date().toISOString();
-    }
-  }));
+      store.updateArenaJob(toArenaJobRecord(job));
+      try {
+        await runSingleArenaModel(store, job, runSummary, request);
+        runSummary.status = 'complete';
+      } catch (error) {
+        runSummary.status = 'failed';
+        runSummary.error = error instanceof Error ? error.message : String(error);
+      } finally {
+        job.updatedAt = new Date().toISOString();
+        store.updateArenaJob(toArenaJobRecord(job));
+      }
+    }));
 
-  job.status = job.runs.some((run) => run.status === 'failed') ? 'failed' : 'complete';
-  job.updatedAt = new Date().toISOString();
+    job.status = job.runs.some((run) => run.status === 'failed') ? 'failed' : 'complete';
+    job.updatedAt = new Date().toISOString();
+    store.updateArenaJob(toArenaJobRecord(job));
+  } finally {
+    runningJobs.delete(job.arenaId);
+  }
 }
 
 async function runSingleArenaModel(
@@ -321,23 +688,29 @@ async function runSingleArenaModel(
   runSummary: ArenaRunSummary,
   request: ArenaStartRequest
 ) {
-  const observation = store.createRun('ai', {
-    runName: `AI Arena · ${runSummary.model}`,
-  });
-  const aiPlayerId = store.createAiPlayer(observation.runId, `Arena ${runSummary.model}`, runSummary.model, {
+  const seed = getArenaSeed(request);
+  const observation = runSummary.runId
+    ? store.getAiObservation(runSummary.runId)
+    : store.createRun('ai', {
+      runName: `${PRODUCT_NAME} · ${runSummary.model}`,
+      seed,
+    });
+  const runConfig = buildArenaRunConfig(request, runSummary.model);
+  const aiPlayerId = store.getOrCreateAiPlayer(observation.runId, `Arena ${runSummary.model}`, runSummary.model, {
     profile: request.profile ?? 'balanced',
     mode: job.mode,
     maxDays: job.maxDays,
-    observationMode: getObservationMode(request, runSummary.model),
-    responseMode: getResponseMode(request, runSummary.model),
-    reasoning: getReasoningMode(request, runSummary.model),
-    requireJsonSchema: getRequireJsonSchema(request),
-    requireParameters: getRequireParameters(request, runSummary.model),
-    maxTokens: getMaxTokens(request, runSummary.model),
-    timeoutMs: getTimeoutMs(request, runSummary.model),
+    seed,
+    config: runConfig,
   });
   let current = observation;
   runSummary.runId = current.runId;
+  runSummary.config = runConfig;
+  runSummary.decisions = mergePersistedDecisions(runSummary.decisions, store.getAiDecisions(current.runId), runSummary.model);
+  runSummary.totalReward = current.scores.total;
+  runSummary.finalCash = Math.round(current.state.cash);
+  runSummary.finalTrust = Math.round(current.state.trust);
+  store.upsertArenaJobRun(job.arenaId, runSummary);
 
   while (!current.done && current.state.history.length < job.maxDays) {
     const day = current.state.day;
@@ -356,24 +729,73 @@ async function runSingleArenaModel(
         mode: job.mode,
         profile: request.profile ?? 'balanced',
         temperature: request.temperature,
-        requireJsonSchema: getRequireJsonSchema(request),
+        requireJsonSchema: getRequireJsonSchema(request, runSummary.model),
         requireParameters: getRequireParameters(request, runSummary.model),
         observationMode: getObservationMode(request, runSummary.model),
         responseMode: getResponseMode(request, runSummary.model),
         reasoning: getReasoningMode(request, runSummary.model),
+        transport: getTransportMode(request, runSummary.model),
         timeoutMs: getTimeoutMs(request, runSummary.model),
         maxTokens: getMaxTokens(request, runSummary.model),
+        seed,
         validationFeedback: [],
       });
     } catch (error) {
       traceError = error instanceof Error ? error.message : String(error);
-      retryCount = 1;
-      decision = {
-        action: conservativeFallbackAction(current),
-        rationale: `Fallback after model action generation failed: ${traceError}`,
-        model: runSummary.model,
-        latencyMs: 0,
-      };
+      if (job.mode === 'llm') {
+        retryCount = 1;
+        try {
+          decision = await decideAction({
+            observation: current,
+            model: runSummary.model,
+            mode: job.mode,
+            profile: request.profile ?? 'balanced',
+            temperature: request.temperature,
+            requireJsonSchema: getRequireJsonSchema(request, runSummary.model),
+            requireParameters: getRequireParameters(request, runSummary.model),
+            observationMode: getObservationMode(request, runSummary.model),
+            responseMode: getResponseMode(request, runSummary.model),
+            reasoning: getReasoningMode(request, runSummary.model),
+            transport: getTransportMode(request, runSummary.model),
+            timeoutMs: getTimeoutMs(request, runSummary.model),
+            maxTokens: getMaxTokens(request, runSummary.model),
+            seed,
+            validationFeedback: [
+              `Previous action generation failed before simulation: ${traceError}. Return only one valid JSON object matching the action schema.`,
+            ],
+          });
+          decision.metadata = withDecisionMetadata(decision.metadata, request, runSummary.model, retryCount, traceError);
+          traceError = undefined;
+        } catch (retryGenerationError) {
+          traceError = retryGenerationError instanceof Error ? retryGenerationError.message : String(retryGenerationError);
+          decision = {
+            action: conservativeFallbackAction(current),
+            rationale: `Fallback after retry action generation failed: ${traceError}`,
+            model: runSummary.model,
+            latencyMs: 0,
+            metadata: buildDecisionMetadata(request, runSummary.model, {
+              retryCount,
+              fallbackUsed: true,
+              validationErrorType: 'generation',
+              emptyContent: /no .*content|no output text/i.test(traceError),
+            }),
+          };
+        }
+      } else {
+        retryCount = 1;
+        decision = {
+          action: conservativeFallbackAction(current),
+          rationale: `Fallback after model action generation failed: ${traceError}`,
+          model: runSummary.model,
+          latencyMs: 0,
+          metadata: buildDecisionMetadata(request, runSummary.model, {
+            retryCount,
+            fallbackUsed: true,
+            validationErrorType: 'generation',
+            emptyContent: /no .*content|no output text/i.test(traceError),
+          }),
+        };
+      }
     }
 
     try {
@@ -391,15 +813,18 @@ async function runSingleArenaModel(
             mode: job.mode,
             profile: request.profile ?? 'balanced',
             temperature: request.temperature,
-            requireJsonSchema: getRequireJsonSchema(request),
+            requireJsonSchema: getRequireJsonSchema(request, runSummary.model),
             requireParameters: getRequireParameters(request, runSummary.model),
             observationMode: getObservationMode(request, runSummary.model),
             responseMode: getResponseMode(request, runSummary.model),
             reasoning: getReasoningMode(request, runSummary.model),
+            transport: getTransportMode(request, runSummary.model),
             timeoutMs: getTimeoutMs(request, runSummary.model),
             maxTokens: getMaxTokens(request, runSummary.model),
+            seed,
             validationFeedback: [validationError],
           });
+          decision.metadata = withDecisionMetadata(decision.metadata, request, runSummary.model, retryCount, validationError);
         } catch (retryGenerationError) {
           traceError = retryGenerationError instanceof Error ? retryGenerationError.message : String(retryGenerationError);
           decision = {
@@ -407,6 +832,12 @@ async function runSingleArenaModel(
             rationale: `Fallback after retry action generation failed: ${traceError}`,
             model: runSummary.model,
             latencyMs: 0,
+            metadata: buildDecisionMetadata(request, runSummary.model, {
+              retryCount,
+              fallbackUsed: true,
+              validationErrorType: 'generation',
+              emptyContent: /no .*content|no output text/i.test(traceError),
+            }),
           };
         }
         try {
@@ -428,6 +859,11 @@ async function runSingleArenaModel(
         rationale: `Fallback after invalid AI action: ${traceError ?? 'unknown validation error'}`,
         model: runSummary.model,
         latencyMs: 0,
+        metadata: buildDecisionMetadata(request, runSummary.model, {
+          retryCount,
+          fallbackUsed: true,
+          validationErrorType: 'validation',
+        }),
       };
       current = stepArenaDay(store, current, aiPlayerId, decision, memory, retryCount, traceError);
     }
@@ -445,11 +881,14 @@ async function runSingleArenaModel(
       latencyMs: decision.latencyMs,
       retryCount,
       error: traceError,
+      metadata: withDecisionMetadata(decision.metadata, request, runSummary.model, retryCount, traceError),
     });
     runSummary.totalReward = current.scores.total;
     runSummary.finalCash = Math.round(current.state.cash);
     runSummary.finalTrust = Math.round(current.state.trust);
     job.updatedAt = new Date().toISOString();
+    store.upsertArenaJobRun(job.arenaId, runSummary);
+    store.updateArenaJob(toArenaJobRecord(job));
   }
 }
 
@@ -465,8 +904,21 @@ function stepArenaDay(
   const startedAt = performance.now();
   const qualityErrors = validateArenaDecisionQuality(observation, decision);
   if (qualityErrors.length > 0) {
-    throw new Error(qualityErrors.join('; '));
+    const validationError = qualityErrors.join('; ');
+    recordDecisionProviderResponse(store, observation, decision.model, decision.metadata, validationError);
+    throw new Error(validationError);
   }
+  const finalMetadata: ArenaDecisionMetadata | undefined = decision.metadata
+    ? {
+      ...decision.metadata,
+      retryCount,
+      fallbackUsed: decision.rationale.startsWith('Fallback after') || decision.metadata.fallbackUsed,
+      validationErrorType: priorError
+        ? decision.metadata.validationErrorType ?? classifyArenaError(priorError)
+        : decision.metadata.validationErrorType,
+      emptyContent: decision.metadata.emptyContent ?? Boolean(priorError && /no .*content|no output text/i.test(priorError)),
+    }
+    : undefined;
   store.createAiDecision({
     runId: observation.runId,
     aiPlayerId,
@@ -479,8 +931,35 @@ function stepArenaDay(
     model: decision.model,
     latencyMs: Math.max(decision.latencyMs, Math.round(performance.now() - startedAt)),
     error: priorError,
+    metadata: finalMetadata,
   });
+  recordDecisionProviderResponse(store, observation, decision.model, finalMetadata, priorError);
   return store.stepOpenEnvRun(observation.runId, decision.action).observation;
+}
+
+function recordDecisionProviderResponse(
+  store: RunStore,
+  observation: RunObservation,
+  model: string,
+  metadata: ArenaDecisionMetadata | undefined,
+  rawError?: string
+) {
+  if (!metadata?.provider || metadata.provider === 'local') return;
+  store.recordAiProviderResponse({
+    runId: observation.runId,
+    day: observation.state.day,
+    model,
+    provider: metadata.provider,
+    transport: metadata.transport,
+    responseId: metadata.responseId,
+    finishReason: metadata.finishReason,
+    usage: metadata.usage,
+    requestJson: metadata.requestJson,
+    responseText: metadata.responseText,
+    emptyContent: metadata.emptyContent,
+    errorClass: rawError ? metadata.validationErrorType ?? classifyArenaError(rawError) : undefined,
+    rawError,
+  });
 }
 
 function validateArenaDecisionQuality(observation: RunObservation, decision: ArenaDecision): string[] {
@@ -552,7 +1031,9 @@ function getMentionedCampaignIds(
   availableCampaigns: RunObservation['availableMarketing']
 ): string[] {
   if (hasNegativeMarketingIntent(rationale)) return [];
-  const normalized = normalizeRationaleText(rationale);
+  const campaignIntentSentences = splitRationaleSentences(rationale)
+    .filter(hasCampaignSelectionIntent)
+    .map(normalizeRationaleText);
   return availableCampaigns
     .filter((campaign) => {
       const candidates = [
@@ -560,16 +1041,26 @@ function getMentionedCampaignIds(
         campaign.name,
         campaign.name.replace(/\s+/g, '_'),
       ].map(normalizeRationaleText);
-      return candidates.some((candidate) => candidate.length > 2 && normalized.includes(candidate));
+      return campaignIntentSentences.some((sentence) => {
+        return candidates.some((candidate) => candidate.length > 2 && sentence.includes(candidate));
+      });
     })
     .map((campaign) => campaign.id);
 }
 
 function mentionsGenericMarketingIntent(rationale: string): boolean {
   if (hasNegativeMarketingIntent(rationale)) return false;
-  const lower = rationale.toLowerCase();
-  return /(activate|run|start|launch|select|use|deploy|schedule|book|promote|push)\s+(a\s+)?(marketing|campaign|promotion|offer|whatsapp|status|pamphlet|loyalty|recovery)/i.test(lower)
-    || /(marketing|campaign|promotion)\s+(active|selected|deployed|planned|scheduled|started|launched)/i.test(lower);
+  return splitRationaleSentences(rationale)
+    .some((sentence) => hasCampaignSelectionIntent(sentence) && /\b(marketing|campaign|promotion|offer|whatsapp|status|pamphlet|loyalty|recovery|combo)\b/i.test(sentence));
+}
+
+function hasCampaignSelectionIntent(sentence: string): boolean {
+  if (hasNegativeMarketingIntent(sentence)) return false;
+  const passiveContinuation = /\b(already|currently|existing|ongoing|active|continues?|continuing|carry over|carried over|from yesterday|previously|queued|scheduled|pipeline|effect|effects|activated|activating)\b/i.test(sentence);
+  const directAction = /\b(activate|run|start|launch|select|add|use|deploy|schedule|book|initiate|promote|push)\b/i.test(sentence);
+  const plannedByActor = /\b(i am|i'm|we are|we're|will|going to|plan to|planning to)\b.{0,50}\b(activate|run|start|launch|select|add|use|deploy|schedule|book|initiate|promote|push)\b.{0,120}\b(marketing|campaign|promotion|offer|whatsapp|status|pamphlet|loyalty|recovery|combo)\b/i.test(sentence);
+  if (passiveContinuation && !directAction && !plannedByActor) return false;
+  return directAction || plannedByActor;
 }
 
 function hasNegativeMarketingIntent(rationale: string): boolean {
@@ -635,6 +1126,17 @@ interface ArenaDecision {
   rationale: string;
   model: string;
   latencyMs: number;
+  metadata?: ArenaDecisionMetadata;
+}
+
+interface DecisionTransportResult {
+  content: string;
+  usage?: unknown;
+  finishReason?: string;
+  responseId?: string;
+  requestJson?: unknown;
+  responseText?: string;
+  emptyContent?: boolean;
 }
 
 async function decideAction(params: {
@@ -648,8 +1150,10 @@ async function decideAction(params: {
   observationMode: ArenaObservationMode;
   responseMode: ArenaResponseMode;
   reasoning: ArenaReasoningMode;
+  transport: ArenaTransportMode;
   timeoutMs: number;
   maxTokens: number;
+  seed?: number;
   validationFeedback: string[];
 }): Promise<ArenaDecision> {
   if (params.mode === 'heuristic' || params.model === 'heuristic-v2') {
@@ -659,10 +1163,102 @@ async function decideAction(params: {
       rationale: 'Heuristic baseline: restock missed demand and essentials, protect cash, discount only risky perishables, and use low-cost marketing.',
       model: params.model,
       latencyMs: Math.round(performance.now() - startedAt),
+      metadata: buildDecisionMetadata(params, params.model, {
+        provider: 'local',
+        transport: 'heuristic',
+      }),
     };
   }
 
+  if (isSarvamModel(params.model)) {
+    return requestSarvamDecision(params);
+  }
+
   return requestOpenRouterDecision(params);
+}
+
+async function requestSarvamDecision(params: {
+  observation: RunObservation;
+  model: string;
+  temperature?: number;
+  requireJsonSchema?: boolean;
+  observationMode: ArenaObservationMode;
+  responseMode: ArenaResponseMode;
+  reasoning: ArenaReasoningMode;
+  transport: ArenaTransportMode;
+  timeoutMs: number;
+  maxTokens: number;
+  seed?: number;
+  validationFeedback: string[];
+}): Promise<ArenaDecision> {
+  const apiKey = process.env.SARVAM_API_KEY;
+  if (!apiKey) throw new Error('SARVAM_API_KEY is required for Sarvam arena mode');
+
+  const startedAt = performance.now();
+  const promptPayload = buildArenaObservationForModel(
+    params.observation,
+    params.validationFeedback,
+    params.observationMode
+  );
+
+  try {
+    const result = await callSarvamChatCompletions({
+      apiKey,
+      model: params.model,
+      temperature: params.temperature,
+      promptPayload,
+      responseMode: params.responseMode,
+      reasoning: params.reasoning,
+      timeoutMs: params.timeoutMs,
+      maxTokens: params.maxTokens,
+    });
+    const parsed = parseDecisionJson(result.content);
+    return {
+      action: sanitizeArenaAction(parsed, params.observation),
+      rationale: getDecisionRationale(parsed),
+      model: params.model,
+      latencyMs: Math.round(performance.now() - startedAt),
+      metadata: buildDecisionMetadata(params, params.model, {
+        provider: 'sarvam',
+        transport: 'chat_completions',
+	        usage: result.usage,
+	        finishReason: result.finishReason,
+	        responseId: result.responseId,
+	        requestJson: result.requestJson,
+	        responseText: result.responseText,
+	        emptyContent: result.emptyContent,
+	      }),
+	    };
+  } catch (error) {
+    if (params.requireJsonSchema || isAbortError(error)) throw error;
+    const result = await callSarvamChatCompletions({
+      apiKey,
+      model: params.model,
+      temperature: params.temperature,
+      promptPayload,
+      responseMode: 'text',
+      reasoning: params.reasoning,
+      timeoutMs: params.timeoutMs,
+      maxTokens: params.maxTokens,
+    });
+    const parsed = parseDecisionJson(result.content);
+    return {
+      action: sanitizeArenaAction(parsed, params.observation),
+      rationale: getDecisionRationale(parsed),
+      model: params.model,
+      latencyMs: Math.round(performance.now() - startedAt),
+      metadata: buildDecisionMetadata(params, params.model, {
+        provider: 'sarvam',
+        transport: 'chat_completions_text_fallback',
+	        usage: result.usage,
+	        finishReason: result.finishReason,
+	        responseId: result.responseId,
+	        requestJson: result.requestJson,
+	        responseText: result.responseText,
+	        emptyContent: result.emptyContent,
+	      }),
+	    };
+  }
 }
 
 async function requestOpenRouterDecision(params: {
@@ -676,6 +1272,7 @@ async function requestOpenRouterDecision(params: {
   reasoning: ArenaReasoningMode;
   timeoutMs: number;
   maxTokens: number;
+  seed?: number;
   validationFeedback: string[];
 }): Promise<ArenaDecision> {
   const apiKey = process.env.OPENROUTER_API_KEY;
@@ -690,48 +1287,174 @@ async function requestOpenRouterDecision(params: {
   const initialResponseMode = params.responseMode;
 
   try {
-    const content = await callOpenRouter({
+    const result = await callOpenRouterDecisionTransport({
       apiKey,
       model: params.model,
       temperature: params.temperature,
       promptPayload,
       responseMode: initialResponseMode,
       reasoning: params.reasoning,
+      transport: params.transport,
       requireParameters: params.requireParameters,
       timeoutMs: params.timeoutMs,
       maxTokens: params.maxTokens,
     });
-    const parsed = parseDecisionJson(content);
+    const parsed = parseDecisionJson(result.content);
     return {
       action: sanitizeArenaAction(parsed, params.observation),
       rationale: getDecisionRationale(parsed),
       model: params.model,
       latencyMs: Math.round(performance.now() - startedAt),
-    };
+      metadata: buildDecisionMetadata(params, params.model, {
+        provider: 'openrouter',
+        transport: resolveOpenRouterTransport(params.model, params.transport) === 'responses' ? 'responses' : 'chat_completions',
+	        usage: result.usage,
+	        finishReason: result.finishReason,
+	        responseId: result.responseId,
+	        requestJson: result.requestJson,
+	        responseText: result.responseText,
+	        emptyContent: result.emptyContent,
+	      }),
+	    };
   } catch (error) {
     if (params.requireJsonSchema || isAbortError(error)) throw error;
-    const content = await callOpenRouter({
+    const result = await callOpenRouterDecisionTransport({
       apiKey,
       model: params.model,
       temperature: params.temperature,
       promptPayload,
       responseMode: 'text',
       reasoning: params.reasoning,
+      transport: params.transport,
       requireParameters: false,
       timeoutMs: params.timeoutMs,
       maxTokens: params.maxTokens,
     });
-    const parsed = parseDecisionJson(content);
+    const parsed = parseDecisionJson(result.content);
     return {
       action: sanitizeArenaAction(parsed, params.observation),
       rationale: getDecisionRationale(parsed),
       model: params.model,
       latencyMs: Math.round(performance.now() - startedAt),
-    };
+      metadata: buildDecisionMetadata(params, params.model, {
+        provider: 'openrouter',
+        transport: resolveOpenRouterTransport(params.model, params.transport) === 'responses' ? 'responses_text_fallback' : 'chat_completions_text_fallback',
+	        usage: result.usage,
+	        finishReason: result.finishReason,
+	        responseId: result.responseId,
+	        requestJson: result.requestJson,
+	        responseText: result.responseText,
+	        emptyContent: result.emptyContent,
+	      }),
+	    };
   }
 }
 
-async function callOpenRouter(params: {
+async function callOpenRouterDecisionTransport(params: {
+  apiKey: string;
+  model: string;
+  temperature?: number;
+  promptPayload: unknown;
+  responseMode: ArenaResponseMode;
+  reasoning: ArenaReasoningMode;
+  transport: ArenaTransportMode;
+  requireParameters?: boolean;
+  timeoutMs: number;
+  maxTokens: number;
+}): Promise<DecisionTransportResult> {
+  return resolveOpenRouterTransport(params.model, params.transport) === 'responses'
+    ? callOpenRouterResponses(params)
+    : callOpenRouterChatCompletions(params);
+}
+
+async function callSarvamChatCompletions(params: {
+  apiKey: string;
+  model: string;
+  temperature?: number;
+  promptPayload: unknown;
+  responseMode: ArenaResponseMode;
+  reasoning: ArenaReasoningMode;
+  timeoutMs: number;
+  maxTokens: number;
+}): Promise<DecisionTransportResult> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), params.timeoutMs);
+  const body: Record<string, unknown> = {
+    model: params.model,
+    messages: [
+      { role: 'system', content: AI_ARENA_SYSTEM_PROMPT },
+      { role: 'user', content: JSON.stringify(params.promptPayload) },
+    ],
+    temperature: params.temperature ?? 0.15,
+    top_p: 1,
+    max_tokens: params.maxTokens,
+    reasoning_effort: getSarvamReasoningEffort(params.reasoning),
+  };
+
+  if (params.responseMode === 'json_schema') {
+    body.response_format = {
+      type: 'json_schema',
+      json_schema: {
+        name: 'kirana_arena_action',
+        strict: true,
+        schema: AI_ARENA_RESPONSE_SCHEMA,
+      },
+    };
+  } else if (params.responseMode === 'json_object') {
+    body.response_format = { type: 'json_object' };
+  }
+
+  try {
+    const response = await fetch('https://api.sarvam.ai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'api-subscription-key': params.apiKey,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      const details = await response.text().catch(() => '');
+      throw new Error(`Sarvam ${params.model} failed with ${response.status}: ${details.slice(0, 500)}`);
+    }
+
+    const data = await response.json() as {
+      id?: string;
+      usage?: unknown;
+      choices?: Array<{
+        finish_reason?: string;
+        message?: {
+          content?: unknown;
+          reasoning_content?: string;
+        };
+      }>;
+    };
+    const choice = data.choices?.[0];
+    const content = extractTextContent(choice?.message?.content);
+    if (!content) {
+      const finishReason = choice?.finish_reason ?? 'unknown';
+      const reasoningLength = choice?.message?.reasoning_content?.length ?? 0;
+      throw new Error(
+        `Sarvam ${params.model} returned no message content (finish_reason=${finishReason}, reasoning_chars=${reasoningLength})`
+      );
+    }
+	    return {
+	      content,
+	      usage: data.usage,
+	      finishReason: choice?.finish_reason,
+	      responseId: data.id,
+	      requestJson: body,
+	      responseText: content,
+	      emptyContent: false,
+	    };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function callOpenRouterChatCompletions(params: {
   apiKey: string;
   model: string;
   temperature?: number;
@@ -741,7 +1464,7 @@ async function callOpenRouter(params: {
   requireParameters?: boolean;
   timeoutMs: number;
   maxTokens: number;
-}): Promise<string> {
+}): Promise<DecisionTransportResult> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), params.timeoutMs);
   const body: Record<string, unknown> = {
@@ -774,6 +1497,10 @@ async function callOpenRouter(params: {
     body.response_format = { type: 'json_object' };
   }
 
+  if (params.responseMode !== 'text') {
+    body.plugins = [{ id: 'response-healing' }];
+  }
+
   if (params.requireParameters && params.responseMode !== 'text') {
     body.provider = { require_parameters: true };
   }
@@ -785,7 +1512,7 @@ async function callOpenRouter(params: {
         Authorization: `Bearer ${params.apiKey}`,
         'Content-Type': 'application/json',
         'HTTP-Referer': 'http://localhost:5175',
-        'X-Title': 'Kirana AI Arena',
+        'X-Title': PRODUCT_NAME,
       },
       body: JSON.stringify(body),
       signal: controller.signal,
@@ -797,11 +1524,110 @@ async function callOpenRouter(params: {
     }
 
     const data = await response.json() as {
-      choices?: Array<{ message?: { content?: unknown } }>;
+      id?: string;
+      usage?: unknown;
+      choices?: Array<{ finish_reason?: string; message?: { content?: unknown } }>;
     };
-    const content = extractTextContent(data.choices?.[0]?.message?.content);
+    const choice = data.choices?.[0];
+    const content = extractTextContent(choice?.message?.content);
     if (!content) throw new Error(`OpenRouter ${params.model} returned no message content`);
-    return content;
+	    return {
+	      content,
+	      usage: data.usage,
+	      finishReason: choice?.finish_reason,
+	      responseId: data.id,
+	      requestJson: body,
+	      responseText: content,
+	      emptyContent: false,
+	    };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function callOpenRouterResponses(params: {
+  apiKey: string;
+  model: string;
+  temperature?: number;
+  promptPayload: unknown;
+  responseMode: ArenaResponseMode;
+  reasoning: ArenaReasoningMode;
+  requireParameters?: boolean;
+  timeoutMs: number;
+  maxTokens: number;
+}): Promise<DecisionTransportResult> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), params.timeoutMs);
+  const body: Record<string, unknown> = {
+    model: params.model,
+    instructions: AI_ARENA_SYSTEM_PROMPT,
+    input: JSON.stringify(params.promptPayload),
+    temperature: params.temperature ?? 0.25,
+    max_output_tokens: params.maxTokens,
+    stream: false,
+    store: false,
+  };
+
+  if (params.reasoning !== 'off') {
+    body.reasoning = { effort: params.reasoning, exclude: true };
+  }
+
+  if (params.responseMode === 'json_schema') {
+    body.text = {
+      format: {
+        type: 'json_schema',
+        name: 'kirana_arena_action',
+        strict: true,
+        schema: AI_ARENA_OPENAI_RESPONSES_SCHEMA,
+      },
+    };
+  } else if (params.responseMode === 'json_object') {
+    body.text = { format: { type: 'json_object' } };
+  }
+
+  if (params.responseMode !== 'text') {
+    body.plugins = [{ id: 'response-healing' }];
+  }
+
+  try {
+    const response = await fetch('https://openrouter.ai/api/v1/responses', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${params.apiKey}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'http://localhost:5175',
+        'X-Title': PRODUCT_NAME,
+        'X-OpenRouter-Title': PRODUCT_NAME,
+      },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      const details = await response.text().catch(() => '');
+      throw new Error(`OpenRouter Responses ${params.model} failed with ${response.status}: ${details.slice(0, 500)}`);
+    }
+
+    const data = await response.json() as Record<string, unknown>;
+    const content = extractResponsesText(data);
+    if (!content) {
+      const status = typeof data.status === 'string' ? data.status : 'unknown';
+      const responseId = typeof data.id === 'string' ? data.id : 'unknown';
+      const error = formatOpenRouterResponseField(data.error);
+      const incomplete = formatOpenRouterResponseField(data.incomplete_details);
+      throw new Error(
+        `OpenRouter Responses ${params.model} returned no output text (id=${responseId}, status=${status}${error}${incomplete})`
+      );
+    }
+	    return {
+	      content,
+	      usage: data.usage,
+	      finishReason: extractResponsesFinishReason(data),
+	      responseId: typeof data.id === 'string' ? data.id : undefined,
+	      requestJson: body,
+	      responseText: content,
+	      emptyContent: false,
+	    };
   } finally {
     clearTimeout(timeout);
   }
@@ -846,13 +1672,14 @@ export function buildArenaObservation(observation: RunObservation, validationFee
       responseShape: '{ "action": PlayerActions, "rationale": string }',
     },
     shop: {
-      name: 'Shree Shyam Bhandar',
+      name: SHOP_NAME,
       cash: Math.round(state.cash),
       trust: Math.round(state.trust),
       scoreSoFar: state.getTotalScore(),
       currentWeather: state.weather,
       cashReserveDefault: DEFAULT_CONFIG.defaultCashReserve,
     },
+    neighborhood: DEFAULT_NEIGHBORHOOD_PROFILE,
     environment: environmentSignals,
     inventory: PRODUCTS.map((product) => {
       const inv = state.getProductInventory(product.id);
@@ -868,8 +1695,9 @@ export function buildArenaObservation(observation: RunObservation, validationFee
         costPrice: product.costPrice,
         sellPrice: product.sellPrice,
         margin: product.margin,
-        baseDemand: product.baseDemand,
-        demandVariance: product.demandVariance,
+        historicalBaselineDemand: product.baseDemand,
+        baselineDemandNote: 'Reference only, not tomorrow demand. Use recent sold/missed history, environment, customers, weather, and marketing.',
+        demandVarianceReference: product.demandVariance,
         storage: product.storage,
         shelfLife: product.shelfLife,
         trustImpact: product.trustImpact,
@@ -980,6 +1808,7 @@ export function buildCompactArenaObservation(observation: RunObservation, valida
       score: state.getTotalScore(),
       weather: state.weather,
     },
+    neighborhood: compactNeighborhoodForArena(),
     signals: {
       day: `${signals.dayName} ${signals.dateLabel}`,
       weather: `${signals.tomorrowWeather.weather} ${signals.tomorrowWeather.temperature}C ${signals.tomorrowWeather.confidence}`,
@@ -1008,7 +1837,8 @@ export function buildCompactArenaObservation(observation: RunObservation, valida
         cost: product.costPrice,
         price: product.sellPrice,
         margin: product.margin,
-        baseDemand: product.baseDemand,
+        historicalBaselineDemand: product.baseDemand,
+        baselineNote: 'reference only; infer tomorrow from signals + recent history',
         trust: product.trustImpact,
         shelfLife: product.shelfLife,
         perishability: perishability.statusLabel,
@@ -1091,6 +1921,41 @@ export function buildCompactArenaObservation(observation: RunObservation, valida
       noDiscounts: {},
     },
     validationFeedback,
+  };
+}
+
+function compactNeighborhoodForArena() {
+  const profile = DEFAULT_NEIGHBORHOOD_PROFILE;
+  return {
+    name: profile.name,
+    fixedForFairArena: true,
+    location: profile.shopLocation.footfallProfile,
+    catchmentRadiusMeters: profile.shopLocation.catchmentRadiusMeters,
+    nearbyDemandEngines: profile.nearbyPlaces.map((place) => ({
+      type: place.type,
+      name: place.name,
+      distanceMeters: place.distanceMeters,
+      households: place.households,
+      population: place.population,
+      dailyPassersby: place.dailyPassersby,
+      segments: place.dominantSegments,
+      waves: place.peakWaves,
+      signals: place.demandSignals,
+    })),
+    segmentPressures: profile.demographics.map((group) => ({
+      segment: group.segment,
+      label: group.label,
+      reachablePopulation: group.reachablePopulation,
+      baseVisitRatePct: group.baseVisitRatePct,
+      peaks: group.peakWaves,
+      basket: group.basketStyle,
+      payment: group.paymentStyle,
+      trustSensitivity: group.trustSensitivity,
+      marketingSensitivity: group.marketingSensitivity,
+      commonNeeds: group.commonNeeds,
+    })),
+    commute: profile.commuteFlow,
+    reasoningSignals: profile.aiVisibleSignals,
   };
 }
 
@@ -1435,6 +2300,53 @@ function extractTextContent(content: unknown): string {
     .join('');
 }
 
+function extractResponsesText(data: Record<string, unknown>): string {
+  if (typeof data.output_text === 'string' && data.output_text.trim()) return data.output_text;
+  const output = data.output;
+  if (!Array.isArray(output)) return '';
+  return output
+    .map((item) => {
+      const row = asRecord(item);
+      const content = row.content;
+      if (typeof content === 'string') return content;
+      if (!Array.isArray(content)) return '';
+      return content
+        .map((part) => {
+          if (typeof part === 'string') return part;
+          const contentPart = asRecord(part);
+          if (typeof contentPart.text === 'string') return contentPart.text;
+          if (typeof contentPart.output_text === 'string') return contentPart.output_text;
+          return '';
+        })
+        .join('');
+    })
+    .join('');
+}
+
+function extractResponsesFinishReason(data: Record<string, unknown>): string | undefined {
+  if (typeof data.status === 'string') return data.status;
+  const incomplete = asRecord(data.incomplete_details);
+  if (typeof incomplete.reason === 'string') return incomplete.reason;
+  const output = data.output;
+  if (!Array.isArray(output)) return undefined;
+  for (const item of output) {
+    const row = asRecord(item);
+    if (typeof row.status === 'string') return row.status;
+    if (typeof row.finish_reason === 'string') return row.finish_reason;
+  }
+  return undefined;
+}
+
+function formatOpenRouterResponseField(field: unknown): string {
+  if (!field) return '';
+  if (typeof field === 'string') return `, detail=${field.slice(0, 220)}`;
+  try {
+    return `, detail=${JSON.stringify(field).slice(0, 220)}`;
+  } catch {
+    return '';
+  }
+}
+
 function isAbortError(error: unknown): boolean {
   return error instanceof Error && (error.name === 'AbortError' || error.message.toLowerCase().includes('aborted'));
 }
@@ -1454,14 +2366,24 @@ function getObservationMode(request: ArenaStartRequest, model: string): ArenaObs
 
 function getResponseMode(request: ArenaStartRequest, model: string): ArenaResponseMode {
   if (request.responseMode) return request.responseMode;
+  if (getTransportMode(request, model) === 'responses' && !supportsStrictOpenRouterResponsesSchema(model)) {
+    return 'json_object';
+  }
   if (isMaxCapabilityProfile(request)) return 'json_schema';
   return isDeepSeekFlash(model) ? 'json_schema' : 'json_schema';
 }
 
 function getReasoningMode(request: ArenaStartRequest, model: string): ArenaReasoningMode {
   if (request.reasoning) return request.reasoning;
+  if (isDeepSeekPro(model)) return 'high';
   if (isMaxCapabilityProfile(request)) return 'medium';
   return isDeepSeekFlash(model) ? 'off' : 'off';
+}
+
+function getTransportMode(request: ArenaStartRequest, model: string): ArenaTransportMode {
+  if (request.transport) return request.transport;
+  if (isMaxCapabilityProfile(request) && providerForModel(model, request.mode) === 'openrouter') return 'responses';
+  return usesOpenRouterResponsesApi(model) ? 'responses' : 'auto';
 }
 
 function getTimeoutMs(request: ArenaStartRequest, model: string): number {
@@ -1480,13 +2402,15 @@ function getMaxTokens(request: ArenaStartRequest, model: string): number {
   return clampInteger(request.maxTokens, 400, MAX_CAPABILITY_TOKENS, defaultTokens);
 }
 
-function getRequireJsonSchema(request: ArenaStartRequest): boolean {
+function getRequireJsonSchema(request: ArenaStartRequest, model?: string): boolean {
   if (typeof request.requireJsonSchema === 'boolean') return request.requireJsonSchema;
+  if (model && getResponseMode(request, model) !== 'json_schema') return false;
   return isMaxCapabilityProfile(request);
 }
 
 function getRequireParameters(request: ArenaStartRequest, model: string): boolean {
   if (typeof request.requireParameters === 'boolean') return request.requireParameters;
+  if (getTransportMode(request, model) === 'responses') return false;
   return getResponseMode(request, model) !== 'text';
 }
 
@@ -1496,6 +2420,62 @@ function isMaxCapabilityProfile(request: ArenaStartRequest): boolean {
 
 function isDeepSeekFlash(model: string): boolean {
   return model === DEEPSEEK_FLASH_MODEL;
+}
+
+function isDeepSeekPro(model: string): boolean {
+  return model === DEEPSEEK_PRO_MODEL;
+}
+
+function isGemini31Pro(model: string): boolean {
+  return model.toLowerCase() === GEMINI_31_PRO_MODEL;
+}
+
+function supportsStrictOpenRouterResponsesSchema(model: string): boolean {
+  const normalized = model.toLowerCase();
+  return (
+    normalized.startsWith('openai/gpt-5.5') ||
+    normalized.startsWith('openai/gpt-5.4') ||
+    normalized.startsWith('openai/gpt-5.3-codex')
+  );
+}
+
+function isSarvamModel(model: string): boolean {
+  return model === SARVAM_105B_MODEL;
+}
+
+function providerForModel(model: string, mode?: ArenaMode): string {
+  if (mode === 'heuristic' || model === 'heuristic-v2') return 'local';
+  if (isSarvamModel(model)) return 'sarvam';
+  return 'openrouter';
+}
+
+function transportForModel(model: string, responseMode?: ArenaResponseMode, transport?: ArenaTransportMode): string {
+  if (model === 'heuristic-v2') return 'heuristic';
+  if (isSarvamModel(model)) return responseMode === 'text' ? 'chat_completions_text' : 'chat_completions';
+  if (resolveOpenRouterTransport(model, transport) === 'responses') return responseMode === 'text' ? 'responses_text' : 'responses';
+  return responseMode === 'text' ? 'chat_completions_text' : 'chat_completions';
+}
+
+function getSarvamReasoningEffort(reasoning: ArenaReasoningMode): 'low' | 'medium' | 'high' | null {
+  if (reasoning === 'off') return null;
+  if (reasoning === 'xhigh') return 'high';
+  return reasoning;
+}
+
+function usesOpenRouterResponsesApi(model: string): boolean {
+  const normalized = model.toLowerCase();
+  return (
+    normalized.startsWith('openai/gpt-5.5') ||
+    normalized.startsWith('openai/gpt-5.4') ||
+    normalized.startsWith('openai/gpt-5.3-codex') ||
+    normalized === GEMINI_31_PRO_MODEL
+  );
+}
+
+function resolveOpenRouterTransport(model: string, transport?: ArenaTransportMode): 'chat_completions' | 'responses' {
+  if (transport === 'chat_completions') return 'chat_completions';
+  if (transport === 'responses') return 'responses';
+  return usesOpenRouterResponsesApi(model) ? 'responses' : 'chat_completions';
 }
 
 async function fetchOpenRouterModelHints() {
@@ -1511,12 +2491,24 @@ async function fetchOpenRouterModelHints() {
       signal: controller.signal,
     });
     if (!response.ok) return [];
-    const data = await response.json() as { data?: Array<{ id?: string; name?: string; pricing?: unknown; context_length?: number }> };
-    const terms = ['kimi', 'glm', 'deepseek', 'flash'];
+    const data = await response.json() as {
+      data?: Array<{
+        id?: string;
+        name?: string;
+        pricing?: unknown;
+        context_length?: number;
+        architecture?: {
+          modality?: string;
+          input_modalities?: string[];
+          output_modalities?: string[];
+        };
+      }>;
+    };
+    const terms = ['gpt-5.5', 'gpt-5.4-mini', 'kimi', 'glm', 'deepseek', 'flash'];
     return (data.data ?? [])
       .filter((model) => {
         const haystack = `${model.id ?? ''} ${model.name ?? ''}`.toLowerCase();
-        return terms.some((term) => haystack.includes(term));
+        return terms.some((term) => haystack.includes(term)) && isTextDecisionModel(model);
       })
       .slice(0, 40)
       .map((model) => ({
@@ -1528,6 +2520,31 @@ async function fetchOpenRouterModelHints() {
   } finally {
     clearTimeout(timeout);
   }
+}
+
+function isTextDecisionModel(model: {
+  id?: string;
+  name?: string;
+  architecture?: {
+    modality?: string;
+    output_modalities?: string[];
+  };
+}) {
+  const haystack = `${model.id ?? ''} ${model.name ?? ''}`.toLowerCase();
+  if (/\b(image|banana|audio|video|music|voice|tts|sora|veo|imagen)\b/.test(haystack)) return false;
+
+  const outputModalities = model.architecture?.output_modalities;
+  if (Array.isArray(outputModalities) && outputModalities.length > 0) {
+    return outputModalities.includes('text') && outputModalities.every((item) => item === 'text');
+  }
+
+  const modality = model.architecture?.modality;
+  if (modality) {
+    const output = modality.split('->').at(1) ?? '';
+    return output.split('+').every((item) => item.trim() === 'text');
+  }
+
+  return true;
 }
 
 function nearestDiscount(value: number): number {

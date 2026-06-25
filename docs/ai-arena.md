@@ -38,6 +38,9 @@ For convenience, it also exposes first-class arena endpoints:
 - `GET /api/arena/models`
 - `POST /api/arena/runs`
 - `GET /api/arena/runs/:arenaId`
+- `POST /api/arena/runs/:arenaId/resume`
+- `GET /api/arena/replays?status=complete&model=...`
+- `GET /api/arena/scoreboard`
 
 Arena runs are unowned AI runs, so they do not mix with logged-in human player sessions.
 
@@ -79,6 +82,25 @@ Each model receives a JSON packet with:
 - action rules and validation feedback
 
 The model should infer demand pressure from environment signals, previous sales, missed demand, weather, weekday, customer rhythm, marketing, and current stock.
+
+### Previous-Day Context
+
+The Arena gives models summarized run memory, not a raw transcript of every prior
+prompt and response.
+
+- Compact observations include the last `3` day summaries.
+- Full observations include the last `5` day summaries.
+- Item rows include recent movement for the same recent window.
+- The backend also persists full observation snapshots in `ai_memory_summaries`
+  for audit and future memory-packet work.
+
+Recent day summaries include day reward, cash, trust, profit, missed demand by SKU,
+stockout count, trust breakdown, and marketing score. The current observation also
+includes active/scheduled campaigns, customer khata state, at-risk customers, current
+stock, perishability, weather, and the fixed neighborhood profile.
+
+This is deliberate: models should reason from recent evidence and environment
+signals without receiving a hidden demand answer key or an unbounded transcript.
 
 ## Required Model Output
 
@@ -134,6 +156,12 @@ The simulator executes the JSON only. Rationale text cannot create orders, campa
 
 Discount validation is sentence-scoped so “No shelf discounts today” does not accidentally attach later item names to a discount claim. The arena also normalizes common LLM discount formats such as `"10%"`, `{ "percent": 10 }`, or `{ "offerPct": 10 }` into numeric action values before validation.
 
+Campaign validation is also sentence-scoped. Mentions of an already active or
+scheduled campaign should not be treated as a new same-day campaign action unless
+the rationale clearly says the model is launching, selecting, scheduling, or using
+that campaign today. This distinction matters for delayed campaigns such as
+`whatsapp_status`, `school_combo`, and `recovery_call`.
+
 Every decision is stored in SQLite:
 
 - model
@@ -141,12 +169,23 @@ Every decision is stored in SQLite:
 - chosen action JSON
 - rationale
 - latency
-- error, if any
+- provider, transport, prompt version, config snapshot, seed, and world version
+- token usage, finish reason, response id, and empty-content flag when the provider returns them
+- validation error type, retry count, fallback flag, and raw error context when relevant
 - day score through the run timeline
+
+Arena jobs themselves are also stored in SQLite. A job created by `POST /api/arena/runs`
+can be inspected after a server restart with `GET /api/arena/runs/:arenaId` and continued
+with `POST /api/arena/runs/:arenaId/resume`. Resume starts from the latest persisted AI
+run day, not from browser memory.
 
 ## OpenRouter Integration
 
-The arena uses OpenRouter chat completions when `OPENROUTER_API_KEY` is configured.
+The arena uses OpenRouter when `OPENROUTER_API_KEY` is configured. Fast/default
+profiles can still use Chat Completions, but max-capability OpenRouter runs now
+prefer the Responses API by default because it is safer for long reasoning jobs
+and persisted replay evaluation. Requests can still set `transport` to
+`chat_completions` or `responses` for compatibility tests.
 
 By default, it requests JSON-schema structured output with:
 
@@ -164,6 +203,15 @@ By default, it requests JSON-schema structured output with:
 ```
 
 If a provider rejects structured output and `requireJsonSchema` is false, the arena retries without `response_format` and parses the returned JSON text.
+
+For Responses API models, the backend sends `instructions`, compact JSON `input`,
+`max_output_tokens`, `reasoning`, and `text.format`. The Responses path uses an
+OpenAI-compatible strict schema variant for the validated GPT 5.x family, enables
+response healing for JSON modes, and does not force `provider.require_parameters`
+because that can prevent OpenRouter from finding a valid Responses endpoint. Other
+max-capability OpenRouter models, including Gemini 3.1 Pro and Grok 4.3, default
+to Responses `json_object` plus backend validation unless strict Responses schema
+compatibility has been proven for that provider.
 
 Exact model IDs are passed through to OpenRouter. Use `GET /api/arena/models` to fetch live hints for model families such as Kimi, GLM, DeepSeek, and Flash when OpenRouter is reachable.
 
@@ -215,13 +263,30 @@ curl -s -X POST http://127.0.0.1:8787/api/arena/max-capability-runs \
   }'
 ```
 
-The max-capability route uses compact observations, strict JSON-schema output, OpenRouter provider parameter enforcement, `medium` reasoning with reasoning excluded from returned content, 16000 output tokens, and a 15-minute model timeout. This is the balanced comparison profile when latency and token cost still matter.
+The max-capability route uses compact observations, 16000 output tokens, and a
+15-minute model timeout. For OpenRouter models, it defaults to the Responses API.
+The validated GPT 5.x family keeps strict schema output; other providers use
+Responses `json_object` with backend validation/retry. Chat Completions runs still
+ask OpenRouter for provider parameter enforcement when strict schema is requested.
+This is the balanced comparison profile when reliability matters more than raw
+latency, while still keeping token cost visible in the persisted decision metadata.
 
 The response includes an `arenaId`. Poll it:
 
 ```bash
 curl -s http://127.0.0.1:8787/api/arena/runs/<arenaId>
 ```
+
+Resume an interrupted persisted job:
+
+```bash
+curl -s -X POST http://127.0.0.1:8787/api/arena/runs/<arenaId>/resume
+```
+
+All Arena jobs store the exact comparison config: model id, provider, transport, prompt
+version, observation mode, response mode, reasoning mode, timeout, max tokens,
+temperature, schema flags, seed, and world version. Benchmark runs default to the fixed
+seed `20260624` unless a `seed` value is supplied in the start request.
 
 ## Visual Replay Route
 
@@ -239,6 +304,10 @@ available.
 The viewer also keeps local shortcuts to recent AI `runId`s. Replaying a saved run
 does not call the model again; it rebuilds the animation from SQLite-stored AI
 decisions and day logs.
+
+The prominent `Replay 30-day Run` shortcut is shown only when a saved AI replay has
+`status=complete` and `daysCompleted=30`. Incomplete smoke tests remain visible as
+history, but are not presented as comparable benchmark replays.
 
 The visual route is intentionally not a second simulator. It only shows existing or derivable backend values: cash, trust, score, weather, events, visits, sold units, revenue, missed units, khata, marketing ROI, reward buckets, customer visits, inventory movements, and AI decision metadata.
 
@@ -265,3 +334,37 @@ Recent observations include `trustBreakdown`. Models should treat it as the caus
 Customer observations also include group/persona hints where available. Use them to distinguish household essentials, office/bulk buyers, students, snack crowds, and newly acquired customers instead of treating every repeat customer the same.
 
 This means the best AI should sometimes keep cash aside instead of buying everything, and sometimes skip marketing when stock is not ready.
+
+## How To Judge An AI Run
+
+Use the generated scoreboard from `GET /api/arena/scoreboard` instead of hand-edited notes
+when comparing models. Look at:
+
+- daily reward versus cumulative score
+- final business health: profit, cash, trust, regulars retained, service rate, waste, and marketing ROI
+- reliability: retries, fallbacks, empty-content responses, validation errors, and average latency
+- product-level service rates: whether essentials such as milk and bread were protected
+- marketing discipline: whether promoted demand was served profitably or converted into stockouts
+
+The best model is not simply the one with the highest same-day score spike. A strong run
+protects trust, avoids promoted stockouts, keeps cash usable, and finishes Day 30 with a
+healthy shop.
+
+### Current Opus 4.8 Reference Run
+
+After fixing the campaign-validation false-positive that affected earlier Opus
+tests, a full `anthropic/claude-opus-4.8` run completed on 2026-06-25 with:
+
+- reward `+1773`
+- final cash `₹46,440`
+- final trust `99`
+- service rate `93.9%`
+- profit `₹47,544`
+- marketing ROI `13.1x`
+- `2` validation retries
+- `0` fallback days
+- recorded OpenRouter cost about `$2.54`
+
+The two retries were still active-campaign wording edge cases, not fallback days.
+Treat the run as a strong current benchmark, while continuing to improve active
+campaign intent detection before more expensive comparison batches.

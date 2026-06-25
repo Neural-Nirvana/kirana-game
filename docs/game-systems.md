@@ -30,6 +30,10 @@ The first playable version uses seven SKUs.
 
 Base demand is not a promise. The actual day is affected by environment, customers, marketing, discounts, and seeded randomness.
 
+For AI Arena benchmarks, base demand should be read as a historical reference only.
+The fair planning signals are environment pressure, weekday/date, weather, events,
+known customer groups, recent sold/missed history, trust, marketing, and inventory state.
+
 ## Environment Signals
 
 Environment signals help the player reason about the future.
@@ -88,6 +92,25 @@ Each customer visit can record:
 - visit reasons
 - demand reasons
 - visit probability
+
+## Randomness And Benchmark Seeds
+
+Demand is intentionally uncertain. A player or AI should never receive a guaranteed
+future order list before deciding stock.
+
+The uncertainty is bounded by visible planning signals:
+
+- environment pressure: rain, heat, weekend, school, festival, month phase
+- likely customer segments: families, students, commuters, regulars, walk-ins, bulk buyers
+- recent sold/missed history
+- weather and event confidence
+- marketing and offer effects
+- trust and customer memory
+
+For model comparison, Arena jobs can use a fixed `seed`. The backend stores that seed
+in the serialized `GameState`, then derives stable per-day simulation seeds from it.
+This lets different models face the same fictional neighborhood, event schedule, and
+randomness profile while still keeping demand uncertain at decision time.
 
 ## Customer Groups And Personas
 

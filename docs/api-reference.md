@@ -250,7 +250,7 @@ Use this when building an external OpenEnv runner or comparing prompts.
 
 ### `GET /api/arena/models`
 
-Returns local presets and, when OpenRouter is reachable, live model hints for Kimi, GLM, DeepSeek, and Flash-like model families.
+Returns local presets and, when OpenRouter is reachable, live text-decision model hints for OpenAI, Kimi, GLM, DeepSeek, and Flash-like model families. Image, audio, and video generation models are filtered out.
 
 Response includes:
 
@@ -279,7 +279,8 @@ Request:
   "responseMode": "json_schema",
   "reasoning": "off",
   "timeoutMs": 90000,
-  "maxTokens": 1000
+  "maxTokens": 1000,
+  "seed": 20260624
 }
 ```
 
@@ -318,10 +319,19 @@ Optional LLM tuning fields:
 - `observationMode`: `full` or `compact`
 - `responseMode`: `json_schema`, `json_object`, or `text`
 - `reasoning`: `off`, `medium`, `high`, or `xhigh`
+- `transport`: `auto`, `chat_completions`, or `responses`. Use this to force an OpenRouter transport for compatibility tests.
 - `requireJsonSchema`: when `true`, the arena does not fall back to plain text if schema generation fails
-- `requireParameters`: when `true`, structured-output calls ask OpenRouter to route only to providers that support required parameters
+- `requireParameters`: when `true`, Chat Completions structured-output calls ask OpenRouter to route only to providers that support required parameters. The Responses API path ignores this routing gate so OpenRouter can find a compatible Responses provider.
 - `timeoutMs`: per-model call timeout, clamped to 15s-15m
 - `maxTokens`: model output token limit, clamped to 400-16000
+- `seed`: deterministic benchmark seed. The same seed gives comparable world/event schedules across models.
+
+Max-capability OpenRouter runs use OpenRouter's Responses API by default. The
+validated GPT 5.x family uses strict Responses schema; other providers use Responses
+`json_object` plus backend validation unless strict schema compatibility is proven.
+Fast/default profiles may still use Chat Completions unless `transport` is explicitly
+set. Gemini 3.1 Pro and Grok 4.3 are current examples of the safer Responses
+`json_object` path.
 
 ### `POST /api/arena/deepseek-flash-runs`
 
@@ -401,6 +411,52 @@ Response fields:
 - `runs[].decisions[]`
 
 Each decision contains the action JSON, rationale, reward, cash, trust, cumulative score, latency, retry count, and any validation error.
+
+Persisted decision metadata can include:
+
+- `provider`, `transport`, `promptVersion`, `configSnapshot`
+- `usage`, `finishReason`, `responseId`, `emptyContent`
+- `validationErrorType`, `retryCount`, `fallbackUsed`
+- `seed`, `worldVersion`
+
+### `POST /api/arena/runs/:arenaId/resume`
+
+Continues an incomplete persisted arena job from the latest saved day.
+
+Use this after a backend restart or interrupted long model run. Completed jobs return
+their existing state. Already-running jobs are not duplicated.
+
+### `GET /api/arena/replays`
+
+Lists saved AI replay summaries.
+
+Query params:
+
+- `status`: use `complete` for comparable 30-day replays
+- `model`: exact model id filter
+- `limit`: max rows
+
+Example:
+
+```text
+GET /api/arena/replays?status=complete&model=google/gemini-3.1-flash-lite
+```
+
+The `/arena` UI only shows the large `Replay 30-day Run` button for saved replays where
+`status=complete` and `daysCompleted=30`.
+
+### `GET /api/arena/scoreboard`
+
+Returns comparable metrics computed from completed AI runs in SQLite.
+
+Scoreboard rows include:
+
+- model, run id, status, days completed, score
+- final cash, final trust, profit, revenue
+- service rate, sold units, missed units, stockout days/incidents
+- waste loss, marketing spend, marketing score, marketing ROI
+- retry/fallback/error counts and average latency
+- product-level service rates
 
 ## OpenEnv-Compatible APIs
 

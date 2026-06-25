@@ -1,12 +1,21 @@
+import { PRODUCT_NAME, PRODUCT_TAGLINE, SHOP_NAME } from '../constants/brand';
 import { adaptAiReplay } from './arena-adapter';
+import {
+  dedupeReplaySummariesByModel,
+  modelMatchesReplay,
+} from './arena-shared';
 import { ArenaStage } from './ArenaStage';
+import { DEFAULT_NEIGHBORHOOD_PROFILE } from '../constants/neighborhood';
 import type {
   AiReplayResponse,
   ArenaJobResponse,
+  ArenaLiveMetrics,
   ArenaModelPreset,
   ArenaModelsResponse,
   ArenaReplayDay,
+  ArenaReplayIndexResponse,
   ArenaReplayRun,
+  ArenaReplaySummary,
   ArenaRunSummary,
 } from './arena-types';
 
@@ -17,17 +26,14 @@ import productChipsUrl from '../assets/arena/product-chips.png';
 import productMilkUrl from '../assets/arena/product-milk.png';
 
 type ArenaProfile = 'fast' | 'max';
+type ArenaPlaybackMode = 'manual' | 'auto';
 
-interface RecentArenaReplay {
-  runId: string;
-  model: string;
-  daysCompleted: number;
-  score: number;
-  savedAt: string;
-}
+type RecentArenaReplay = ArenaReplaySummary;
 
 const RECENT_REPLAYS_KEY = 'shree-shyam-arena-recent-replays';
 const POLL_INTERVAL_MS = 3500;
+const AUTO_ADVANCE_DELAY_MS = 5200;
+const COMPLETE_REPLAY_DAYS = 30;
 const DEFAULT_MODEL_PRESETS: ArenaModelPreset[] = [
   {
     id: 'heuristic-v2',
@@ -38,6 +44,31 @@ const DEFAULT_MODEL_PRESETS: ArenaModelPreset[] = [
     id: 'google/gemini-3.1-flash-lite',
     label: 'Gemini Flash Lite',
     note: 'Fast US-provider candidate for live viewing.',
+  },
+  {
+    id: 'openai/gpt-5.5',
+    label: 'GPT 5.5',
+    note: 'Strong OpenAI reasoning baseline. Uses Responses API.',
+  },
+  {
+    id: 'openai/gpt-5.4-mini',
+    label: 'GPT 5.4 Mini',
+    note: 'OpenAI text model for low-latency kirana decisions.',
+  },
+  {
+    id: 'google/gemini-3.1-pro-preview',
+    label: 'Gemini 3.1 Pro',
+    note: 'High-reasoning Gemini candidate. Uses Responses in max runs.',
+  },
+  {
+    id: 'x-ai/grok-4.3',
+    label: 'Grok 4.3',
+    note: 'xAI high-reasoning candidate. Uses Responses JSON-object in max runs.',
+  },
+  {
+    id: 'anthropic/claude-opus-4.8',
+    label: 'Claude Opus 4.8',
+    note: 'Premium Anthropic reasoning model. Smoke-test before full runs.',
   },
   {
     id: 'z-ai/glm-5.2',
@@ -52,7 +83,7 @@ const DEFAULT_MODEL_PRESETS: ArenaModelPreset[] = [
   {
     id: 'deepseek/deepseek-v4-pro',
     label: 'DeepSeek V4 Pro',
-    note: 'Stronger DeepSeek candidate for longer runs.',
+    note: 'Stronger DeepSeek candidate; max runs use high reasoning.',
   },
 ];
 
@@ -69,12 +100,15 @@ export class ArenaApp {
   private reportOpen = false;
   private introVisible = false;
   private modelPickerOpen = false;
+  private playbackMode: ArenaPlaybackMode = 'manual';
+  private liveMetrics?: ArenaLiveMetrics;
   private selectedModel = 'heuristic-v2';
   private customModel = '';
   private profile: ArenaProfile = 'fast';
   private maxDays = 30;
   private modelPresets: ArenaModelPreset[] = DEFAULT_MODEL_PRESETS;
   private recentReplays: RecentArenaReplay[] = loadRecentReplays();
+  private indexedReplays: ArenaReplaySummary[] = [];
   private autoPlayedDays = new Set<number>();
   private launcherMessage = 'Choose an AI model, start a live run, then watch each completed day replay from the backend.';
   private launcherError = false;
@@ -88,11 +122,12 @@ export class ArenaApp {
   async start() {
     this.renderShell();
     this.bindEvents();
-    this.stage = new ArenaStage(this.requireElement('arena-stage'));
+    this.stage = new ArenaStage(this.requireElement('arena-stage'), (metrics) => this.updateLiveMetrics(metrics));
     this.stage.mount(undefined);
-    this.setLoading('Choose a model above to start a live AI arena run.');
+    this.setLoading('Pick an AI model, then replay a completed benchmark or start a fresh live run.', false, true);
     this.renderIdle();
     void this.loadModelOptions();
+    void this.loadReplayIndex();
     if (shouldShowIntro()) this.showIntro();
   }
 
@@ -109,30 +144,42 @@ export class ArenaApp {
     }
   }
 
+  private async loadReplayIndex() {
+    try {
+      const response = await requestJson<ArenaReplayIndexResponse>('/api/arena/replays?status=complete');
+      this.indexedReplays = response.replays;
+      this.renderLauncher();
+      this.renderModelPicker();
+      this.renderHud(this.run?.days[this.activeDayIndex]);
+    } catch {
+      this.indexedReplays = [];
+    }
+  }
+
   private renderShell() {
     this.root.innerHTML = `
-      <main class="arena-root" aria-label="Shree Shyam Bhandar AI Arena Replay">
+      <main class="arena-root" aria-label="${PRODUCT_NAME} Replay">
         <section class="arena-hud" id="arena-hud"></section>
-        <section class="arena-launcher" id="arena-launcher"></section>
+        <section class="arena-dashboard" id="arena-dashboard"></section>
         <section class="arena-stage-shell">
           <div class="arena-stage-frame" id="arena-stage"></div>
           <div class="arena-stage-overlay" id="arena-loading">
-            <div class="arena-loader-title">Preparing AI Arena</div>
+            <div class="arena-loader-title">Preparing ${PRODUCT_NAME}</div>
             <div class="arena-loader-subtitle">Choose a model to begin.</div>
           </div>
         </section>
-        <section class="arena-dashboard" id="arena-dashboard"></section>
         <section class="arena-footer">
           <div class="arena-timeline" id="arena-timeline"></div>
           <div class="arena-controls" id="arena-controls"></div>
         </section>
+        <section class="arena-launcher" id="arena-launcher"></section>
         <section class="arena-intro" id="arena-intro" hidden>
           <div class="arena-intro-card">
-            <div class="arena-intro-eyebrow">AI Arena Replay</div>
+            <div class="arena-intro-eyebrow">${PRODUCT_NAME} Replay</div>
             <h2>Can an AI run a kirana for 30 days?</h2>
             <p>
-              Shree Shyam Bhandar turns dukaandari into a visible AI test:
-              the model reads inventory, weather, customers, trust, khata, and marketing,
+              ${SHOP_NAME} turns dukaandari into a visible AI test:
+              the model reads a fixed fictional neighborhood, inventory, weather, customers, trust, khata, and marketing,
               then submits one JSON plan per day.
             </p>
             <div class="arena-intro-grid">
@@ -140,6 +187,7 @@ export class ArenaApp {
               <div><strong>2. Watch it decide</strong><span>Every action JSON is validated and saved.</span></div>
               <div><strong>3. Replay the proof</strong><span>Customers, rewards, misses, and trust changes animate from real backend results.</span></div>
             </div>
+            ${neighborhoodBrief('intro')}
             <button data-arena-action="start-intro" type="button">Choose AI Model</button>
           </div>
         </section>
@@ -159,13 +207,18 @@ export class ArenaApp {
       if (action === 'select-model') this.selectModel(target.dataset.model ?? 'heuristic-v2');
       if (action === 'profile') this.setProfile(target.dataset.profile === 'max' ? 'max' : 'fast');
       if (action === 'start-live') void this.startLiveArena();
-      if (action === 'replay-run') void this.loadStoredReplay(target.dataset.runId ?? '');
+      if (action === 'replay-run') {
+        this.modelPickerOpen = false;
+        void this.loadStoredReplay(target.dataset.runId ?? '');
+      }
       if (action === 'clear-replays') this.clearRecentReplays();
       if (action === 'simulate') void this.playActiveDay();
       if (action === 'pause') this.togglePause();
       if (action === 'replay') void this.replayDay();
       if (action === 'report') this.toggleReport();
       if (action === 'speed') this.setSpeed(Number(target.dataset.speed ?? 5));
+      if (action === 'playback-mode') this.setPlaybackMode(target.dataset.mode === 'auto' ? 'auto' : 'manual');
+      if (action === 'next-day') void this.playNextDayFromControls();
       if (action === 'timeline') this.selectDay(Number(target.dataset.dayIndex ?? 0));
       if (action === 'start-intro') this.dismissIntro();
     });
@@ -195,7 +248,7 @@ export class ArenaApp {
     markIntroSeen();
     this.requireElement('arena-intro').hidden = true;
     this.introVisible = false;
-    this.setLoading('Choose a model above to start a live AI arena run.');
+    this.setLoading('Pick an AI model, then replay a completed benchmark or start a fresh live run.', false, true);
     this.openModelPicker();
   }
 
@@ -214,8 +267,11 @@ export class ArenaApp {
   private selectModel(model: string) {
     this.selectedModel = model;
     if (model !== 'custom') this.customModel = '';
+    const completedReplay = this.completedReplayForModel(this.resolvedModel);
     this.launcherError = false;
-    this.launcherMessage = isHeuristicModel(this.resolvedModel)
+    this.launcherMessage = completedReplay
+      ? `${modelLabel(this.resolvedModel, this.modelPresets)} has a completed 30-day replay. Use Replay 30-day Run for instant judging.`
+      : isHeuristicModel(this.resolvedModel)
       ? 'Built-in heuristic will run instantly and save the replay like any other AI.'
       : 'This model will call OpenRouter and stream completed days into the arena as they finish.';
     this.renderLauncher();
@@ -246,6 +302,7 @@ export class ArenaApp {
     this.playing = false;
     this.paused = false;
     this.reportOpen = false;
+    this.liveMetrics = undefined;
     this.run = undefined;
     this.arenaJob = undefined;
     this.autoPlayedDays.clear();
@@ -357,9 +414,12 @@ export class ArenaApp {
     const hasNewDay = this.run && this.run.days.length > previousDays;
     if (hasNewDay) {
       this.launcherError = false;
-      this.launcherMessage = `Day ${this.run?.days.length ?? 0} completed by ${modelLabel(run.model, this.modelPresets)}. Animating backend result.`;
+      this.launcherMessage = this.playbackMode === 'auto'
+        ? `Day ${this.run?.days.length ?? 0} completed by ${modelLabel(run.model, this.modelPresets)}. Animating backend result.`
+        : `Day ${this.run?.days.length ?? 0} is ready. Press Play Day when you are ready to watch.`;
       this.renderLauncher();
-      void this.playNextUnplayedDay();
+      if (this.playbackMode === 'auto') void this.playNextUnplayedDay();
+      else this.renderAll();
     } else if (job.status === 'running') {
       const nextDay = Math.min((this.run?.days.length ?? 0) + 1, job.maxDays);
       this.setLoading(`${modelLabel(run.model, this.modelPresets)} is thinking through Day ${nextDay}...`);
@@ -370,8 +430,10 @@ export class ArenaApp {
     if (!runId) return;
     this.stopPolling();
     this.stage?.stopReplay();
+    this.arenaJob = undefined;
     this.playing = false;
     this.paused = false;
+    this.modelPickerOpen = false;
     this.autoPlayedDays.clear();
     this.setLoading(`Loading saved replay ${shortId(runId)}...`);
 
@@ -379,11 +441,13 @@ export class ArenaApp {
       const replay = await requestJson<AiReplayResponse>(`/api/ai-runs/${encodeURIComponent(runId)}`);
       this.applyReplayResponse(replay);
       if (!this.run || this.run.days.length === 0) throw new Error('Saved run has no completed days yet.');
+      this.selectModelFromReplay(this.run.days[0]?.model);
       this.launcherError = false;
-      this.launcherMessage = `Loaded saved replay ${shortId(runId)}. No model call needed.`;
+      this.launcherMessage = `Loaded ${modelLabel(this.run.days[0].model, this.modelPresets)} replay ${shortId(runId)}. No model call needed.`;
       this.renderLauncher();
       this.clearLoading();
-      void this.playNextUnplayedDay();
+      if (this.playbackMode === 'auto') void this.playNextUnplayedDay();
+      else this.renderAll();
     } catch (error) {
       this.launcherError = true;
       this.launcherMessage = error instanceof Error ? error.message : String(error);
@@ -396,6 +460,7 @@ export class ArenaApp {
     const replay = adaptAiReplay(response, maxDaysOverride);
     const sameRun = this.run?.runId === replay.runId;
     this.run = replay;
+    this.liveMetrics = undefined;
     if (!sameRun) {
       this.activeDayIndex = 0;
       this.autoPlayedDays.clear();
@@ -416,8 +481,11 @@ export class ArenaApp {
     const replay: RecentArenaReplay = {
       runId: run.runId,
       model: run.model,
+      status: run.status,
       daysCompleted: run.decisions.length,
       score: run.totalReward,
+      finalCash: run.finalCash,
+      finalTrust: run.finalTrust,
       savedAt: new Date().toISOString(),
     };
     this.recentReplays = [
@@ -431,6 +499,37 @@ export class ArenaApp {
     this.recentReplays = [];
     saveRecentReplays(this.recentReplays);
     this.renderLauncher();
+  }
+
+  private allReplaySummaries() {
+    const byRunId = new Map<string, ArenaReplaySummary>();
+    for (const replay of [...this.indexedReplays, ...this.recentReplays]) {
+      const existing = byRunId.get(replay.runId);
+      if (!existing || replay.daysCompleted > existing.daysCompleted) byRunId.set(replay.runId, replay);
+    }
+    return [...byRunId.values()]
+      .sort((a, b) => b.daysCompleted - a.daysCompleted || Date.parse(b.savedAt) - Date.parse(a.savedAt));
+  }
+
+  private featuredReplaySummaries() {
+    return dedupeReplaySummariesByModel(this.allReplaySummaries());
+  }
+
+  private completedReplayForModel(model: string) {
+    return this.featuredReplaySummaries().find((replay) =>
+      modelMatchesReplay(model, replay.model) && replay.status === 'complete' && replay.daysCompleted >= COMPLETE_REPLAY_DAYS
+    );
+  }
+
+  private selectModelFromReplay(model: string | undefined) {
+    if (!model) return;
+    if (this.modelPresets.some((preset) => preset.id === model)) {
+      this.selectedModel = model;
+      this.customModel = '';
+    } else {
+      this.selectedModel = 'custom';
+      this.customModel = model;
+    }
   }
 
   private renderIdle() {
@@ -458,7 +557,7 @@ export class ArenaApp {
     const nextIndex = this.run.days.findIndex((day) => !this.autoPlayedDays.has(day.day));
     if (nextIndex < 0) return;
     this.activeDayIndex = nextIndex;
-    this.autoPlayedDays.add(this.run.days[nextIndex].day);
+    this.liveMetrics = undefined;
     this.stage?.setDay(this.activeDay);
     this.renderAll();
     await this.playActiveDay(true);
@@ -468,18 +567,24 @@ export class ArenaApp {
     if (!this.run || this.playing || this.run.days.length === 0) return;
     this.playing = true;
     this.paused = false;
+    this.liveMetrics = openingLiveMetrics(this.activeDay);
     this.stage?.setPaused(false);
-    this.renderControls();
+    this.renderAll();
     await this.stage?.playDay(this.activeDay, this.speed);
+    this.autoPlayedDays.add(this.activeDay.day);
+    this.liveMetrics = finalLiveMetrics(this.activeDay);
     this.playing = false;
-    this.renderControls();
-    if (autoAdvance) window.setTimeout(() => void this.playNextUnplayedDay(), 450);
+    this.renderAll();
+    if (autoAdvance && this.playbackMode === 'auto') {
+      window.setTimeout(() => void this.playNextUnplayedDay(), AUTO_ADVANCE_DELAY_MS);
+    }
   }
 
   private async replayDay() {
     if (!this.run) return;
     this.stage?.stopReplay();
     this.playing = false;
+    this.liveMetrics = undefined;
     await this.playActiveDay();
   }
 
@@ -497,6 +602,7 @@ export class ArenaApp {
     this.activeDayIndex = nextIndex;
     this.playing = false;
     this.paused = false;
+    this.liveMetrics = undefined;
     this.stage?.setDay(this.activeDay);
     this.reportOpen = false;
     this.renderAll();
@@ -507,6 +613,41 @@ export class ArenaApp {
     this.renderControls();
   }
 
+  private setPlaybackMode(mode: ArenaPlaybackMode) {
+    this.playbackMode = mode;
+    this.launcherMessage = mode === 'auto'
+      ? 'Auto mode will continue to the next completed day after a longer reading pause.'
+      : 'Manual mode waits after every day so you can read the report before moving on.';
+    this.renderLauncher();
+    this.renderControls();
+    if (mode === 'auto') void this.playNextUnplayedDay();
+  }
+
+  private async playNextDayFromControls() {
+    if (!this.run || this.playing) return;
+    const nextIndex = this.activeDayIndex + 1;
+    if (nextIndex >= this.run.days.length) return;
+    this.stage?.stopReplay();
+    this.activeDayIndex = nextIndex;
+    this.paused = false;
+    this.liveMetrics = undefined;
+    this.stage?.setDay(this.activeDay);
+    this.renderAll();
+    await this.playActiveDay();
+  }
+
+  private updateLiveMetrics(metrics: ArenaLiveMetrics) {
+    if (!this.run || metrics.day !== this.activeDay.day) return;
+    this.liveMetrics = metrics;
+    this.renderHud(this.activeDay);
+    this.renderDashboard(this.activeDay);
+  }
+
+  private liveMetricsFor(day: ArenaReplayDay | undefined) {
+    if (!day || this.liveMetrics?.day !== day.day) return undefined;
+    return this.liveMetrics;
+  }
+
   private toggleReport() {
     if (!this.run) return;
     this.reportOpen = !this.reportOpen;
@@ -515,27 +656,28 @@ export class ArenaApp {
   }
 
   private renderHud(day?: ArenaReplayDay) {
+    const live = this.liveMetricsFor(day);
     this.requireElement('arena-hud').innerHTML = `
       <div class="arena-brand">
         <div class="arena-brand-icon">▣</div>
         <div>
-          <h1>Shree Shyam Bhandar</h1>
-          <p>AI Arena Live</p>
+          <h1>${PRODUCT_NAME}</h1>
+          <p>${PRODUCT_TAGLINE} · Live</p>
         </div>
       </div>
       ${day
         ? [
           hudCard('Day', `${pad(day.day)}/${day.maxDays}`, 'DAY', ''),
-          hudCard('Cash', money(day.cash), '₹', `Profit today ${money(day.metrics.profit)}`),
-          hudCard('Trust', `${day.trust}%`, '♥', `${signed(day.trustDelta)} today`, day.trustDelta < 0 ? 'bad' : 'good'),
-          hudCard('Score', `${day.score.toLocaleString('en-IN')}`, '★', `Last reward ${signed(day.lastReward)}`, day.lastReward < 0 ? 'bad' : 'good'),
+          hudCard('Cash', money(live?.cash ?? day.cash), '₹', live ? `Revenue live ${money(live.revenue)}` : `Profit today ${money(day.metrics.profit)}`),
+          hudCard('Trust', `${live?.trust ?? day.trust}%`, '♥', live ? `${live.visits} visits live` : `${signed(day.trustDelta)} today`, (live?.trust ?? day.trust) < day.trust ? 'bad' : 'good'),
+          hudCard('Score', `${(live?.score ?? day.score).toLocaleString('en-IN')}`, '★', live ? 'updates at close' : `Last reward ${signed(day.lastReward)}`, day.lastReward < 0 ? 'bad' : 'good'),
           hudCard('Weather', day.weather, weatherIcon(day.weather), ''),
           hudCard('Event', day.eventLabel, '⚑', ''),
         ].join('')
         : [
           hudCard('Model', modelLabel(this.resolvedModel, this.modelPresets), 'AI', isHeuristicModel(this.resolvedModel) ? 'local baseline' : 'OpenRouter'),
           hudCard('Episode', `0/${this.maxDays}`, 'DAY', '1 step = 1 shop day'),
-          hudCard('Replay', `${this.recentReplays.length}`, 'SAVE', 'saved local shortcuts'),
+          hudCard('Replay', `${this.allReplaySummaries().length}`, 'SAVE', 'saved AI runs'),
           hudCard('Status', this.arenaJob?.status ?? 'Ready', 'RUN', this.arenaJob ? shortId(this.arenaJob.arenaId) : 'choose model'),
         ].join('')}
     `;
@@ -544,48 +686,69 @@ export class ArenaApp {
   private renderLauncher() {
     const model = this.resolvedModel;
     const run = this.arenaJob ? primaryRun(this.arenaJob) : undefined;
+    const activeReplayDay = this.run?.days[this.activeDayIndex];
+    const replayLoaded = Boolean(activeReplayDay && !this.arenaJob);
+    const displayModel = activeReplayDay?.model ?? run?.model ?? model;
     const completedDays = this.run?.days.length ?? run?.decisions.length ?? 0;
+    const displayMaxDays = activeReplayDay?.maxDays ?? this.arenaJob?.maxDays ?? this.maxDays;
+    const statusLabel = this.arenaJob ? this.arenaJob.status : replayLoaded ? 'replay loaded' : 'ready';
     const latestLatency = latestDecisionLatency(run);
+    const selectedBenchmarkReplay = this.completedReplayForModel(model);
+    const replayShortcuts = this.featuredReplaySummaries();
     this.requireElement('arena-launcher').innerHTML = `
       <div class="arena-launcher-main">
         <div class="arena-operator-summary">
-          <div class="arena-panel-title">AI Operator <span>${this.arenaJob ? `job ${shortId(this.arenaJob.arenaId)}` : 'ready'}</span></div>
+          <div class="arena-panel-title">AI Operator <span>${this.arenaJob ? `job ${shortId(this.arenaJob.arenaId)}` : replayLoaded ? `replay ${shortId(this.run?.runId ?? '')}` : 'ready'}</span></div>
           <div class="arena-operator-row">
             <div class="arena-selected-model">
-              <span>Selected AI</span>
-              <strong>${escapeHtml(modelLabel(model, this.modelPresets))}</strong>
-              <small>${escapeHtml(model)}</small>
+              <span>${replayLoaded ? 'Loaded Replay' : 'Selected AI'}</span>
+              <strong>${escapeHtml(modelLabel(displayModel, this.modelPresets))}</strong>
+              <small>${escapeHtml(displayModel)}</small>
             </div>
             <div class="arena-run-spec">
-              <span>${this.profile === 'max' ? 'Max capability' : 'Fast live'}</span>
-              <strong>${this.maxDays} day${this.maxDays === 1 ? '' : 's'}</strong>
-              <small>${isHeuristicModel(model) ? 'local baseline' : 'OpenRouter run'}</small>
+              <span>${replayLoaded ? 'Saved replay' : this.profile === 'max' ? 'Max capability' : 'Fast live'}</span>
+              <strong>${replayLoaded ? `${completedDays}/${displayMaxDays}` : `${this.maxDays} day${this.maxDays === 1 ? '' : 's'}`}</strong>
+              <small>${replayLoaded ? `run ${shortId(this.run?.runId ?? '')}` : isHeuristicModel(model) ? 'local baseline' : 'OpenRouter run'}</small>
             </div>
             <div class="arena-operator-actions">
               <button data-arena-action="open-model-picker" type="button">Choose AI Model</button>
+              ${selectedBenchmarkReplay ? `
+                <button
+                  class="arena-replay-run"
+                  data-arena-action="replay-run"
+                  data-run-id="${escapeHtml(selectedBenchmarkReplay.runId)}"
+                  type="button"
+                  ${this.playing ? 'disabled' : ''}
+                >
+                  Replay 30-day Run
+                </button>
+              ` : ''}
               <button class="arena-start-run" data-arena-action="start-live" type="button" ${this.playing ? 'disabled' : ''}>
-                Start Live Run
+                ${replayLoaded ? 'Start New Live Run' : 'Start Live Run'}
               </button>
             </div>
           </div>
         </div>
         <aside class="arena-live-card ${this.launcherError ? 'error' : ''}">
-          <span>${this.arenaJob ? this.arenaJob.status : 'ready'}</span>
-          <strong>${escapeHtml(modelLabel(model, this.modelPresets))}</strong>
+          <span>${statusLabel}</span>
+          <strong>${escapeHtml(modelLabel(displayModel, this.modelPresets))}</strong>
           <p>${escapeHtml(this.launcherMessage)}</p>
           <div class="arena-live-progress">
-            <span>${completedDays}/${this.arenaJob?.maxDays ?? this.maxDays} days</span>
-            <span>${run?.status ?? 'not started'}</span>
+            <span>${completedDays}/${displayMaxDays} days</span>
+            <span>${replayLoaded ? `day ${activeReplayDay?.day ?? 1} selected` : run?.status ?? 'not started'}</span>
             ${latestLatency ? `<span>${Math.round(latestLatency / 1000)}s latency</span>` : ''}
           </div>
         </aside>
       </div>
-      ${this.recentReplays.length > 0 ? `
+      ${replayShortcuts.length > 0 ? `
         <div class="arena-replay-library">
-          <div class="arena-library-title">Saved replay shortcuts <button data-arena-action="clear-replays" type="button">Clear</button></div>
+          <div class="arena-library-title">
+            Saved replay shortcuts
+            ${this.recentReplays.length > 0 ? '<button data-arena-action="clear-replays" type="button">Clear local</button>' : ''}
+          </div>
           <div class="arena-library-list">
-            ${this.recentReplays.map((replay) => `
-              <button data-arena-action="replay-run" data-run-id="${escapeHtml(replay.runId)}" type="button">
+            ${replayShortcuts.map((replay) => `
+              <button class="${this.run?.runId === replay.runId ? 'active' : ''}" data-arena-action="replay-run" data-run-id="${escapeHtml(replay.runId)}" type="button">
                 <strong>${escapeHtml(modelLabel(replay.model, this.modelPresets))}</strong>
                 <span>${replay.daysCompleted} days · score ${signed(replay.score)} · ${shortId(replay.runId)}</span>
               </button>
@@ -602,6 +765,7 @@ export class ArenaApp {
     if (!this.modelPickerOpen) return;
 
     const model = this.resolvedModel;
+    const selectedBenchmarkReplay = this.completedReplayForModel(model);
     modal.innerHTML = `
       <div class="arena-model-backdrop" data-arena-action="close-model-picker"></div>
       <div class="arena-model-dialog" role="dialog" aria-modal="true" aria-label="Choose AI model">
@@ -613,17 +777,21 @@ export class ArenaApp {
           <button data-arena-action="close-model-picker" type="button">Close</button>
         </div>
         <div class="arena-model-grid">
-          ${this.modelPresets.slice(0, 10).map((preset) => `
-            <button
-              class="arena-model-chip ${model === preset.id ? 'active' : ''}"
-              data-arena-action="select-model"
-              data-model="${escapeHtml(preset.id)}"
-              type="button"
-            >
-              <strong>${escapeHtml(preset.label)}</strong>
-              <span>${escapeHtml(compactSentence(preset.note, 92))}</span>
-            </button>
-          `).join('')}
+          ${this.modelPresets.slice(0, 10).map((preset) => {
+            const benchmarkReplay = this.completedReplayForModel(preset.id);
+            return `
+              <button
+                class="arena-model-chip ${model === preset.id ? 'active' : ''} ${benchmarkReplay ? 'has-replay' : ''}"
+                data-arena-action="select-model"
+                data-model="${escapeHtml(preset.id)}"
+                type="button"
+              >
+                <strong>${escapeHtml(preset.label)}</strong>
+                <span>${escapeHtml(compactSentence(preset.note, 92))}</span>
+                ${benchmarkReplay ? `<em>30-day replay ready · score ${signed(benchmarkReplay.score)}</em>` : ''}
+              </button>
+            `;
+          }).join('')}
           <button
             class="arena-model-chip ${this.selectedModel === 'custom' ? 'active' : ''}"
             data-arena-action="select-model"
@@ -644,17 +812,39 @@ export class ArenaApp {
             <input id="arena-max-days" type="number" min="1" max="30" value="${this.maxDays}" />
           </label>
           <div class="arena-profile-toggle" aria-label="Run profile">
-            <button class="${this.profile === 'fast' ? 'active' : ''}" data-arena-action="profile" data-profile="fast" type="button">Fast live</button>
-            <button class="${this.profile === 'max' ? 'active' : ''}" data-arena-action="profile" data-profile="max" type="button">Max capability</button>
+            <button class="${this.profile === 'fast' ? 'active' : ''}" data-arena-action="profile" data-profile="fast" type="button">
+              <strong>Fast live</strong>
+              <span>quick replay settings</span>
+            </button>
+            <button class="${this.profile === 'max' ? 'active' : ''}" data-arena-action="profile" data-profile="max" type="button">
+              <strong>Max capability</strong>
+              <span>deeper reasoning run</span>
+            </button>
           </div>
+          ${selectedBenchmarkReplay ? `
+            <button
+              class="arena-model-replay-cta"
+              data-arena-action="replay-run"
+              data-run-id="${escapeHtml(selectedBenchmarkReplay.runId)}"
+              type="button"
+            >
+              <strong>Replay 30-day Run</strong>
+              <span>Score ${signed(selectedBenchmarkReplay.score)} · ${selectedBenchmarkReplay.daysCompleted} days</span>
+            </button>
+          ` : ''}
           <button class="arena-start-run" data-arena-action="start-live" type="button" ${this.playing ? 'disabled' : ''}>
-            Start Live Run
+            <strong>Start Live Run</strong>
+            <span>calls selected AI now</span>
           </button>
+        </div>
+        <div class="arena-model-world-strip">
+          <strong>Fixed arena world</strong>
+          <span>Nehru Colony School Road · 700m catchment · 2 societies · 900 students · 2,500 road passers/day</span>
         </div>
         <div class="arena-model-dialog-note">
           <strong>${escapeHtml(modelLabel(model, this.modelPresets))}</strong>
           <span>${escapeHtml(this.profile === 'max'
-            ? 'Max capability asks for stricter JSON, medium reasoning, and a longer timeout.'
+            ? 'Max capability asks for stricter JSON, model-aware reasoning, and a longer timeout.'
             : 'Fast live is tuned for watchability with compact observations and shorter response settings.')}</span>
         </div>
       </div>
@@ -672,10 +862,20 @@ export class ArenaApp {
             <div><strong>Reward</strong><span>The backend day score after customers actually visit.</span></div>
             <div><strong>Replay</strong><span>Saved AI decisions plus day logs rebuild the animation.</span></div>
           </div>
+          ${neighborhoodStrip()}
         </div>
       `;
       return;
     }
+
+    const live = this.liveMetricsFor(day);
+    const resultMetrics = {
+      visits: live?.visits ?? day.metrics.visits,
+      soldUnits: live?.soldUnits ?? day.metrics.soldUnits,
+      missedUnits: live?.missedUnits ?? day.metrics.missedUnits,
+      revenue: live?.revenue ?? day.metrics.revenue,
+      khata: live?.khata ?? day.metrics.khata,
+    };
 
     this.requireElement('arena-dashboard').innerHTML = `
       <div class="arena-panel arena-actions">
@@ -711,11 +911,11 @@ export class ArenaApp {
       <div class="arena-panel arena-results">
         <div class="arena-panel-title">Today's Result <span>actual backend output</span></div>
         <div class="arena-result-grid">
-          ${metricCard('Visits', day.metrics.visits.toString(), 'VIS')}
-          ${metricCard('Sold Units', day.metrics.soldUnits.toString(), 'SLD')}
-          ${metricCard('Revenue', money(day.metrics.revenue), '₹')}
-          ${metricCard('Missed Units', day.metrics.missedUnits.toString(), 'MIS', day.metrics.missedUnits > 0 ? 'bad' : 'good')}
-          ${metricCard('Khata', money(day.metrics.khata), 'KHA', day.metrics.khata > 0 ? 'warn' : 'good')}
+          ${metricCard('Visits', resultMetrics.visits.toString(), 'VIS')}
+          ${metricCard('Sold Units', resultMetrics.soldUnits.toString(), 'SLD')}
+          ${metricCard('Revenue', money(resultMetrics.revenue), '₹')}
+          ${metricCard('Missed Units', resultMetrics.missedUnits.toString(), 'MIS', resultMetrics.missedUnits > 0 ? 'bad' : 'good')}
+          ${metricCard('Khata', money(resultMetrics.khata), 'KHA', resultMetrics.khata > 0 ? 'warn' : 'good')}
           ${metricCard('Mkt ROI', `${day.metrics.marketingRoi.toFixed(1)}x`, 'ROI')}
         </div>
       </div>
@@ -760,16 +960,37 @@ export class ArenaApp {
 
   private renderControls() {
     const day = this.run?.days[this.activeDayIndex];
+    const dayPlayed = day ? this.autoPlayedDays.has(day.day) : false;
+    const hasNextDay = Boolean(this.run && this.activeDayIndex + 1 < this.run.days.length);
+    const waitingForLiveDay = !day && (this.arenaJob?.status === 'queued' || this.arenaJob?.status === 'running');
+    const primaryAction = day ? 'simulate' : 'start-live';
+    const primaryDisabled = day ? this.playing : this.playing || waitingForLiveDay;
+    const primaryTitle = day
+      ? `${dayPlayed ? 'Replay' : 'Play'} Day ${pad(day.day)}`
+      : waitingForLiveDay
+        ? 'AI Thinking'
+        : 'Start Live Run';
+    const primarySubtitle = day
+      ? 'watch saved backend replay'
+      : waitingForLiveDay
+        ? 'waiting for first completed day'
+        : 'use selected model below';
     this.requireElement('arena-controls').innerHTML = `
-      <button class="arena-primary" data-arena-action="simulate" type="button" ${!day || this.playing ? 'disabled' : ''}>
-        ▶ ${day ? `Simulate Day ${pad(day.day)}` : 'Waiting for Day 1'}
-        <span>${day ? 'watch what happened' : 'start or load a run'}</span>
+      <button class="arena-primary" data-arena-action="${primaryAction}" type="button" ${primaryDisabled ? 'disabled' : ''}>
+        ▶ ${primaryTitle}
+        <span>${primarySubtitle}</span>
       </button>
+      <div class="arena-speed-group">
+        ${(['manual', 'auto'] as ArenaPlaybackMode[]).map((mode) => `
+          <button class="${this.playbackMode === mode ? 'active' : ''}" data-arena-action="playback-mode" data-mode="${mode}" type="button">${mode === 'manual' ? 'Manual' : 'Auto'}</button>
+        `).join('')}
+      </div>
       <div class="arena-speed-group">
         ${[1, 5, 20].map((speed) => `
           <button class="${this.speed === speed ? 'active' : ''}" data-arena-action="speed" data-speed="${speed}" type="button">${speed}x</button>
         `).join('')}
       </div>
+      <button data-arena-action="next-day" type="button" ${!dayPlayed || !hasNextDay || this.playing ? 'disabled' : ''}>Next Day</button>
       <button data-arena-action="pause" type="button" ${!this.playing ? 'disabled' : ''}>${this.paused ? 'Resume' : 'Pause'}</button>
       <button data-arena-action="replay" type="button" ${!day ? 'disabled' : ''}>Replay</button>
       <button class="${this.reportOpen ? 'active' : ''}" data-arena-action="report" type="button" ${!day ? 'disabled' : ''}>View Report</button>
@@ -826,13 +1047,19 @@ export class ArenaApp {
     `;
   }
 
-  private setLoading(message: string, isError = false) {
+  private setLoading(message: string, isError = false, showStartActions = false) {
     const loading = this.requireElement('arena-loading');
     loading.hidden = false;
     loading.classList.toggle('error', isError);
     loading.innerHTML = `
-      <div class="arena-loader-title">${isError ? 'Arena needs attention' : 'AI Arena'}</div>
+      <div class="arena-loader-title">${isError ? 'Arena needs attention' : PRODUCT_NAME}</div>
       <div class="arena-loader-subtitle">${escapeHtml(message)}</div>
+      ${showStartActions ? `
+        <div class="arena-loader-actions">
+          <button class="arena-loader-primary" data-arena-action="open-model-picker" type="button">Start Live Replay</button>
+          <button data-arena-action="start-live" type="button">Quick Heuristic Run</button>
+        </div>
+      ` : ''}
     `;
   }
 
@@ -867,6 +1094,73 @@ function primaryRun(job: ArenaJobResponse): ArenaRunSummary | undefined {
 
 function latestDecisionLatency(run: ArenaRunSummary | undefined) {
   return run?.decisions.at(-1)?.latencyMs ?? 0;
+}
+
+function neighborhoodBrief(variant: 'intro' | 'model') {
+  const profile = DEFAULT_NEIGHBORHOOD_PROFILE;
+  const school = profile.nearbyPlaces.find((place) => place.type === 'school');
+  const societies = profile.nearbyPlaces.filter((place) => place.type === 'residential_society');
+  const households = societies.reduce((sum, place) => sum + (place.households ?? 0), 0);
+  const className = variant === 'intro' ? 'arena-neighborhood-brief intro' : 'arena-neighborhood-brief';
+
+  return `
+    <section class="${className}" aria-label="Fixed neighborhood context">
+      <div class="arena-neighborhood-head">
+        <span>Fixed Arena World</span>
+        <strong>${escapeHtml(profile.name)}</strong>
+        <p>${escapeHtml(profile.shopLocation.footfallProfile)}</p>
+      </div>
+      <div class="arena-neighborhood-facts">
+        <div><span>Catchment</span><strong>${profile.shopLocation.catchmentRadiusMeters}m</strong></div>
+        <div><span>Societies</span><strong>${societies.length} · ${households} homes</strong></div>
+        <div><span>School</span><strong>${school?.population ?? 0} students</strong></div>
+        <div><span>Road Flow</span><strong>${profile.commuteFlow.dailyPassersby.toLocaleString('en-IN')}/day</strong></div>
+      </div>
+      <div class="arena-neighborhood-places">
+        ${profile.nearbyPlaces.slice(0, 4).map((place) => `
+          <article>
+            <span>${escapeHtml(placeTypeLabel(place.type))} · ${place.distanceMeters}m</span>
+            <strong>${escapeHtml(place.name)}</strong>
+            <p>${escapeHtml(place.demandSignals[0] ?? '')}</p>
+          </article>
+        `).join('')}
+      </div>
+      <div class="arena-neighborhood-signals">
+        ${profile.aiVisibleSignals.slice(0, variant === 'intro' ? 5 : 4).map((signal) => `
+          <span>${escapeHtml(signal)}</span>
+        `).join('')}
+      </div>
+    </section>
+  `;
+}
+
+function neighborhoodStrip() {
+  const profile = DEFAULT_NEIGHBORHOOD_PROFILE;
+  const school = profile.nearbyPlaces.find((place) => place.type === 'school');
+  return `
+    <div class="arena-neighborhood-strip">
+      <div>
+        <span>Fixed test world</span>
+        <strong>${escapeHtml(profile.name)}</strong>
+      </div>
+      <div>
+        <span>Nearby school</span>
+        <strong>${school?.population ?? 0} students</strong>
+      </div>
+      <div>
+        <span>Commute road</span>
+        <strong>${profile.commuteFlow.dailyPassersby.toLocaleString('en-IN')} passersby/day</strong>
+      </div>
+      <div>
+        <span>AI receives</span>
+        <strong>societies · school · road · segments</strong>
+      </div>
+    </div>
+  `;
+}
+
+function placeTypeLabel(type: string) {
+  return type.replace(/_/g, ' ');
 }
 
 async function requestJson<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -940,6 +1234,35 @@ function dayTone(day: ArenaReplayDay) {
   return 'good';
 }
 
+function openingLiveMetrics(day: ArenaReplayDay): ArenaLiveMetrics {
+  const paidToday = day.visits.reduce((total, visit) => total + visit.amountPaid, 0);
+  return {
+    day: day.day,
+    cash: Math.round(day.cash - paidToday),
+    trust: Math.round(day.trust - day.trustDelta),
+    score: day.score - day.lastReward,
+    visits: 0,
+    soldUnits: 0,
+    missedUnits: 0,
+    revenue: 0,
+    khata: 0,
+  };
+}
+
+function finalLiveMetrics(day: ArenaReplayDay): ArenaLiveMetrics {
+  return {
+    day: day.day,
+    cash: day.cash,
+    trust: day.trust,
+    score: day.score,
+    visits: day.metrics.visits,
+    soldUnits: day.metrics.soldUnits,
+    missedUnits: day.metrics.missedUnits,
+    revenue: day.metrics.revenue,
+    khata: day.metrics.khata,
+  };
+}
+
 function weatherIcon(weather: string) {
   if (/rain/i.test(weather)) return 'RAIN';
   if (/heat/i.test(weather)) return 'HEAT';
@@ -948,6 +1271,9 @@ function weatherIcon(weather: string) {
 }
 
 function modelLabel(model: string, presets: ArenaModelPreset[]) {
+  if (model === 'heuristic-v2' || model === 'heuristic-v1') {
+    return presets.find((preset) => preset.id === 'heuristic-v2')?.label ?? 'Built-in Heuristic';
+  }
   return presets.find((preset) => preset.id === model)?.label ?? model;
 }
 
@@ -958,7 +1284,7 @@ function mergeModelPresets(
 ): ArenaModelPreset[] {
   const byId = new Map<string, ArenaModelPreset>();
   for (const preset of [...defaults, ...presets]) byId.set(preset.id, preset);
-  for (const model of available.slice(0, 10)) {
+  for (const model of available.filter(isArenaTextModelHint).slice(0, 10)) {
     if (!model.id || byId.has(model.id)) continue;
     byId.set(model.id, {
       id: model.id,
@@ -967,6 +1293,11 @@ function mergeModelPresets(
     });
   }
   return Array.from(byId.values());
+}
+
+function isArenaTextModelHint(model: ArenaModelsResponse['available'][number]) {
+  const haystack = `${model.id} ${model.name ?? ''}`.toLowerCase();
+  return !/\b(image|banana|audio|video|music|voice|tts|sora|veo|imagen)\b/.test(haystack);
 }
 
 function isHeuristicModel(model: string) {

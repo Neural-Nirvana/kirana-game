@@ -19,6 +19,7 @@ export class GameState {
   cash: number = DEFAULT_CONFIG.startingCash;
   trust: number = DEFAULT_CONFIG.startingTrust;
   weather: Weather = 'normal';
+  runSeed?: number;
   inventory: Map<ProductId, ProductInventory> = new Map();
   customers: CustomerProfile[] = cloneCustomers();
   history: DayLog[] = [];
@@ -43,6 +44,7 @@ export class GameState {
     this.trust = this.config.startingTrust;
     this.history = [];
     this.weather = 'normal';
+    this.runSeed = undefined;
     this.customers = cloneCustomers();
     this.currentActions = {
       orders: {},
@@ -167,6 +169,7 @@ export class GameState {
       cash: this.cash,
       trust: this.trust,
       weather: this.weather,
+      runSeed: this.runSeed,
       inventory: Array.from(this.inventory.values()).map((inv) => ({
         productId: inv.productId,
         buckets: inv.buckets.map((bucket) => ({ ...bucket })),
@@ -194,6 +197,7 @@ export class GameState {
     state.cash = serialized.cash;
     state.trust = serialized.trust;
     state.weather = serialized.weather;
+    state.runSeed = serialized.runSeed;
     state.customers = cloneCustomers(serialized.customers);
     state.history = serialized.history.map((log) => ({
       ...log,

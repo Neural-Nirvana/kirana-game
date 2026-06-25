@@ -10,7 +10,7 @@ The experience should look like a polished arcade management game:
 
 ```text
 top HUD
-  -> customer queue | AI kiosk | racks + conveyor
+  -> customer service loop | AI kiosk | racks + conveyor
   -> action cards | thought stream | result metrics | reward breakdown
 ```
 
@@ -24,13 +24,18 @@ The arena viewer uses the first-class AI Arena endpoints for live model runs:
 GET /api/arena/models
 POST /api/arena/runs
 GET /api/arena/runs/:arenaId
+POST /api/arena/runs/:arenaId/resume
+GET /api/arena/replays?status=complete
+GET /api/arena/scoreboard
 GET /api/ai-runs/:runId
 ```
 
 The higher-level Arena API is used instead of raw OpenEnv because the viewer needs
 model ids, rationale, validation retry/fallback state, latency, and saved decision
-records. The raw OpenEnv endpoints remain available for external agents. Both
-paths use the same backend state and simulation step.
+records. Arena jobs are persisted in SQLite, so an interrupted long model run can be
+resumed by `arenaId` instead of being lost with server memory. The raw OpenEnv endpoints
+remain available for external agents. Both paths use the same backend state and
+simulation step.
 
 Completed day `timeline`, `decisions`, `summary`, and `observation` records are
 converted into replay events. No hidden simulator truth is invented in the UI.
@@ -45,6 +50,8 @@ Supported source objects:
 - `RewardBreakdown`
 - `MarketingPerformance`
 - stored AI decisions
+- persisted Arena job/run summaries
+- provider response metadata when available
 
 ## Displayed Metrics
 
@@ -71,6 +78,12 @@ Only existing or derivable metrics may appear:
 
 Do not show unsupported metrics such as percentile rank, synthetic efficiency, or invented forecast percentages.
 
+Replay CTAs must respect completion state:
+
+- show `Replay 30-day Run` only when `status=complete` and `daysCompleted=30`
+- show incomplete smoke tests as history, not as benchmark-ready replays
+- use `GET /api/arena/scoreboard` for model comparison tables instead of hard-coded docs or frontend-only math
+
 ## Visual Contract
 
 ### First-Visit Intro
@@ -80,7 +93,7 @@ The first time a viewer opens `/arena`, show a short intro before starting the b
 The intro answers three questions:
 
 - What is this? A 30-day AI kirana replay.
-- What does the AI see? Weather, events, inventory, customers, trust, cash, khata, perishables, and marketing.
+- What does the AI see? Fixed neighborhood context, weather, events, inventory, customers, trust, cash, khata, perishables, and marketing.
 - What are we proving? The model's JSON plan is tested by simulated customers and scored by the real backend.
 
 The intro can be forced for QA with:
@@ -90,6 +103,34 @@ The intro can be forced for QA with:
 ```
 
 After the viewer starts the replay, store `shree-shyam-arena-intro-seen=1` in local storage so repeat visits go straight to the arena.
+
+### Fixed Neighborhood Context
+
+Arena comparisons use one fictional, fixed catchment profile:
+
+```text
+Nehru Colony School Road
+```
+
+This profile lives in:
+
+```text
+src/constants/neighborhood.ts
+```
+
+Every model receives the same neighborhood facts through the Arena observation:
+
+- mixed residential school-road kirana catchment
+- 700m catchment radius
+- two nearby residential societies
+- a 900-student school
+- a 2,500-passersby connector road
+- segment behavior for families, students, commuters, regulars, and walk-ins
+
+The viewer also sees this context in the first-visit intro, model-selection modal,
+and idle dashboard. This makes demand reasoning visible and keeps model judgement
+fair: a better run should come from using the same signals better, not from
+receiving different hidden world data.
 
 ### Top HUD
 
@@ -107,29 +148,45 @@ The HUD shows:
 
 The stage is a fixed wide Phaser diorama (`1600x390`) with three zones:
 
-1. **Customer Queue**: customer sprites line up with demand bubbles.
+1. **Customer Service Loop**: one active customer enters, asks, receives items, reacts, then exits.
 2. **AI Kiosk**: robot/shopkeeper receives and validates demand. The current model is rendered on the apron by code.
 3. **Racks + Conveyor**: rack/fridge sprites show stock; product sprites move along a conveyor toward the counter.
 
-Queue rules:
+Customer loop rules:
 
-- Customers arrive dynamically during the day instead of being permanently pre-rendered.
-- The first customer appears in the queue slot closest to the AI bot/counter.
-- Service proceeds from closest-to-bot outward, so the visual order matches how a real counter queue would be read.
-- Up to five visible customers can wait at a time.
-- As a served customer exits, a later customer can enter the freed slot.
+- Customers are not permanently pre-rendered as a queue.
+- Each visit is replayed as a mini scene: entry, speech-bubble demand, AI handoff, fulfillment marks, feedback, and exit.
+- Demand bubbles remain visible while the order is being served.
+- Product sprites move from shelf/fridge to conveyor, then to the AI kiosk, then to the customer.
+- Fulfilled items receive green check marks inside the demand bubble.
+- Partial products receive an amber `PART` marker instead of switching from fulfilled to missed.
+- Missed items receive warning marks inside the demand bubble.
+- Cash, trust, visits, sold units, missed units, revenue, and khata update as customer visits complete.
 - Fulfilled or partial customers exit with the `customer-jhola-full.png` sprite to signal they are leaving with purchased goods.
 - Missed customers exit with a warning/miss reaction instead of a filled bag.
 
 Day phase rules:
 
-- A morning overlay appears when the day begins.
+- The day begins without a blocking overlay so customer transactions remain visible.
+- A compact top-right live status badge shows ready/live/complete state, day number, phase, weather, and event.
 - Afternoon and evening overlays are inserted from the actual visit count, not clock time.
 - Phase changes use PNG overlays so the shop feels like one continuous environment moving through the day.
 
+### Decision Console
+
+Above the stage, the viewer shows the decision console:
+
+- AI Actions
+- AI Thought Stream
+- Today's Result
+- Reward Breakdown
+
+This lets the viewer read the AI's plan and expected/actual backend metrics
+before watching the shop-floor replay.
+
 ### AI Operator Bar
 
-Above the stage, the viewer shows an operator bar:
+Below the stage and replay controls, the viewer shows an operator bar:
 
 - selected AI model
 - current run profile
@@ -137,6 +194,7 @@ Above the stage, the viewer shows an operator bar:
 - live job status and completed-day count
 - `Choose AI Model` button
 - `Start Live Run` button
+- manual/auto replay mode in the bottom controls
 
 The detailed model controls are not always visible. The `Choose AI Model` button
 opens a modal/popup containing:
@@ -151,30 +209,30 @@ Fast live uses compact observations and shorter response settings for viewabilit
 Max capability uses the backend max-capability endpoint with stricter schema,
 medium reasoning, and a long timeout.
 
-### Bottom Console
+Manual replay is the default viewer mode. A completed day stops on its report until
+the viewer presses `Next Day`. Auto mode can continue through completed days, but
+must leave a clear reading pause before advancing.
 
-The bottom DOM console shows:
+### Bottom Timeline And Controls
 
-- AI Actions
-- AI Thought Stream
-- Today's Result
-- Reward Breakdown
-- Day Timeline
-- playback controls
+The lower replay strip shows the day timeline and playback controls. The operator
+bar sits below this strip so model selection does not interrupt the visual replay.
 
 ## Replay Events
 
 The adapter converts each completed day into these event kinds:
 
+- `day_started`
+- `ai_scanned`
 - `customer_entered`
 - `demand_shown`
-- `ai_scanned`
 - `item_conveyed`
 - `sale_paid`
 - `khata_written`
 - `stockout_missed`
 - `trust_changed`
 - `customer_exited`
+- `metrics_changed`
 - `reward_updated`
 - `day_complete`
 
@@ -196,7 +254,7 @@ It is produced by:
 node scripts/generate-arena-stage-backdrop.mjs
 ```
 
-This backdrop bakes the shop environment, customer queue area, AI kiosk zone, shelves, fridge, produce area, and conveyor into one image. Phaser should only place dynamic elements on top:
+This backdrop bakes the shop environment, active customer service area, AI kiosk zone, shelves, fridge, produce area, and conveyor into one image. Phaser should only place dynamic elements on top:
 
 - customer sprites
 - AI robot sprite and model label
@@ -260,7 +318,7 @@ Use the placeholder generator only when the sprite sheet is unavailable. It crea
 
 - `src/main.ts`: route switch; `/arena` dynamically imports the replay app, the existing human game route remains unchanged.
 - `src/arena/ArenaApp.ts`: DOM HUD, dashboard panels, timeline, report drawer, and replay controls.
-- `src/arena/ArenaStage.ts`: Phaser scene for the customer queue, AI kiosk, racks, fridge, conveyor, sprites, popups, and tweens.
+- `src/arena/ArenaStage.ts`: Phaser scene for the customer service loop, AI kiosk, racks, fridge, conveyor, sprites, popups, and tweens.
 - `src/arena/arena-adapter.ts`: converts backend `DayLog` and stored AI decisions into replay days and animation events.
 - `src/arena/arena-types.ts`: typed replay view model.
 - `scripts/extract-arena-sprite-sheet.mjs`: crops generated sprite sheets into project assets.

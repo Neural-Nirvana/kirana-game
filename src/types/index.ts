@@ -75,6 +75,60 @@ export interface EnvironmentContext {
   signals: string[];
 }
 
+export type NearbyPlaceType = 'residential_society' | 'school' | 'bus_stop' | 'market_lane' | 'office_cluster';
+
+export interface NearbyPlaceProfile {
+  id: string;
+  name: string;
+  type: NearbyPlaceType;
+  distanceMeters: number;
+  households?: number;
+  population?: number;
+  dailyPassersby?: number;
+  dominantSegments: CustomerSegment[];
+  peakWaves: CustomerWave[];
+  demandSignals: string[];
+}
+
+export interface DemographicSegmentProfile {
+  segment: CustomerSegment;
+  label: string;
+  reachablePopulation: number;
+  baseVisitRatePct: number;
+  peakWaves: CustomerWave[];
+  paymentStyle: 'mostly_cash' | 'cash_and_khata' | 'quick_cash' | 'bulk_cash';
+  basketStyle: string;
+  trustSensitivity: 'low' | 'medium' | 'high';
+  marketingSensitivity: 'low' | 'medium' | 'high';
+  commonNeeds: ProductId[];
+  notes: string[];
+}
+
+export interface CommuteFlowProfile {
+  roadName: string;
+  dailyPassersby: number;
+  morningPeak: string;
+  eveningPeak: string;
+  impulseSegments: CustomerSegment[];
+  notes: string[];
+}
+
+export interface NeighborhoodProfile {
+  id: string;
+  name: string;
+  shopLocation: {
+    areaType: string;
+    roadType: string;
+    catchmentRadiusMeters: number;
+    footfallProfile: string;
+  };
+  nearbyPlaces: NearbyPlaceProfile[];
+  demographics: DemographicSegmentProfile[];
+  commuteFlow: CommuteFlowProfile;
+  arenaFairnessNote: string;
+  aiVisibleSignals: string[];
+}
+
 export interface PlayerActions {
   orders: Partial<Record<ProductId, number>>;
   removals: Partial<Record<ProductId, number>>;
@@ -394,6 +448,7 @@ export interface SerializedGameState {
   cash: number;
   trust: number;
   weather: Weather;
+  runSeed?: number;
   inventory: SerializedProductInventory[];
   customers: CustomerProfile[];
   history: DayLog[];

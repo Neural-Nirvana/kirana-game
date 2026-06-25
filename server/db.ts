@@ -139,6 +139,55 @@ function migrate(db: DatabaseSync) {
       error TEXT
     );
 
+    CREATE TABLE IF NOT EXISTS arena_jobs (
+      id TEXT PRIMARY KEY,
+      status TEXT NOT NULL,
+      mode TEXT NOT NULL,
+      models_json TEXT NOT NULL,
+      max_days INTEGER NOT NULL,
+      request_json TEXT NOT NULL,
+      config_json TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      error TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS arena_job_runs (
+      id TEXT PRIMARY KEY,
+      arena_id TEXT NOT NULL REFERENCES arena_jobs(id) ON DELETE CASCADE,
+      model TEXT NOT NULL,
+      status TEXT NOT NULL,
+      day INTEGER NOT NULL,
+      total_reward INTEGER NOT NULL,
+      run_id TEXT REFERENCES game_runs(id) ON DELETE SET NULL,
+      final_cash INTEGER,
+      final_trust INTEGER,
+      decisions_json TEXT NOT NULL,
+      config_json TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      error TEXT,
+      UNIQUE(arena_id, model)
+    );
+
+    CREATE TABLE IF NOT EXISTS ai_provider_responses (
+      id TEXT PRIMARY KEY,
+      run_id TEXT REFERENCES game_runs(id) ON DELETE CASCADE,
+      day INTEGER NOT NULL,
+      model TEXT NOT NULL,
+      provider TEXT,
+      transport TEXT,
+      response_id TEXT,
+      finish_reason TEXT,
+      usage_json TEXT,
+      request_json TEXT,
+      response_text TEXT,
+      empty_content INTEGER NOT NULL DEFAULT 0,
+      error_class TEXT,
+      raw_error TEXT,
+      created_at TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS ai_memory_summaries (
       id TEXT PRIMARY KEY,
       run_id TEXT NOT NULL REFERENCES game_runs(id) ON DELETE CASCADE,
@@ -162,11 +211,29 @@ function migrate(db: DatabaseSync) {
   ensureColumn(db, 'game_runs', 'run_name', 'TEXT');
   ensureColumn(db, 'game_runs', 'version', 'INTEGER NOT NULL DEFAULT 0');
   ensureColumn(db, 'marketing_campaigns', 'target_products_json', 'TEXT');
+  ensureColumn(db, 'ai_decisions', 'provider', 'TEXT');
+  ensureColumn(db, 'ai_decisions', 'transport', 'TEXT');
+  ensureColumn(db, 'ai_decisions', 'prompt_version', 'TEXT');
+  ensureColumn(db, 'ai_decisions', 'config_json', 'TEXT');
+  ensureColumn(db, 'ai_decisions', 'usage_json', 'TEXT');
+  ensureColumn(db, 'ai_decisions', 'finish_reason', 'TEXT');
+  ensureColumn(db, 'ai_decisions', 'response_id', 'TEXT');
+  ensureColumn(db, 'ai_decisions', 'empty_content', 'INTEGER NOT NULL DEFAULT 0');
+  ensureColumn(db, 'ai_decisions', 'validation_error_type', 'TEXT');
+  ensureColumn(db, 'ai_decisions', 'retry_count', 'INTEGER NOT NULL DEFAULT 0');
+  ensureColumn(db, 'ai_decisions', 'fallback_used', 'INTEGER NOT NULL DEFAULT 0');
+  ensureColumn(db, 'ai_decisions', 'seed', 'INTEGER');
+  ensureColumn(db, 'ai_decisions', 'world_version', 'TEXT');
+  ensureColumn(db, 'ai_provider_responses', 'request_json', 'TEXT');
+  ensureColumn(db, 'ai_provider_responses', 'response_text', 'TEXT');
   db.exec(`
     CREATE UNIQUE INDEX IF NOT EXISTS idx_players_kind_name_key ON players(kind, name_key) WHERE name_key IS NOT NULL;
     CREATE INDEX IF NOT EXISTS idx_game_runs_player_id ON game_runs(player_id, updated_at);
     CREATE INDEX IF NOT EXISTS idx_player_sessions_token_hash ON player_sessions(token_hash);
     CREATE INDEX IF NOT EXISTS idx_player_sessions_player_id ON player_sessions(player_id);
+    CREATE INDEX IF NOT EXISTS idx_arena_jobs_status_updated ON arena_jobs(status, updated_at);
+    CREATE INDEX IF NOT EXISTS idx_arena_job_runs_arena_id ON arena_job_runs(arena_id);
+    CREATE INDEX IF NOT EXISTS idx_ai_provider_responses_run_day ON ai_provider_responses(run_id, day);
   `);
 }
 

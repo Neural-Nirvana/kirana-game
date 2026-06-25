@@ -112,8 +112,11 @@ If it does not match, the backend returns `404`.
 | `player_actions` | action JSON submitted for each day. |
 | `marketing_campaigns` | scheduled, active, completed campaign instances. |
 | `ai_players` | AI benchmark agent metadata. |
-| `ai_decisions` | AI action, rationale, hash, latency, error. |
+| `ai_decisions` | AI action, rationale, hash, latency, provider/config metadata, retry/fallback state, error. |
 | `ai_memory_summaries` | compact memory packets for AI runs. |
+| `ai_provider_responses` | provider response audit rows: response id, finish reason, usage, empty-content flag, and raw errors. |
+| `arena_jobs` | persisted Arena job status, request/config snapshot, model list, and aggregate run state. |
+| `arena_job_runs` | one persisted model-run summary per Arena job/model pair for restart/resume. |
 | `run_events` | notable simulation events. |
 
 SQLite uses:
@@ -182,16 +185,32 @@ Semantics:
 
 The arena:
 
-1. creates an unowned AI run
-2. builds a JSON observation with environment, inventory, customers, marketing, recent history, and reward rules
-3. sends the observation plus system prompt to a model through OpenRouter, or uses the built-in heuristic mode
-4. sanitizes and validates the returned action JSON
-5. gives LLMs one retry with validation feedback if the action is invalid
-6. falls back to a conservative action if the retry fails
-7. stores each decision in `ai_decisions` and compact memory in `ai_memory_summaries`
-8. repeats until Day 30
+1. creates and persists an Arena job in `arena_jobs`
+2. creates an unowned AI run for each model, using the job seed for comparable benchmarks
+3. builds a JSON observation with environment, inventory, customers, marketing, recent history, and reward rules
+4. sends the observation plus system prompt to a model through OpenRouter/Sarvam, or uses the built-in heuristic mode
+5. sanitizes and validates the returned action JSON
+6. gives LLMs one retry with validation feedback if the action is invalid
+7. falls back to a conservative action if the retry fails
+8. stores each decision in `ai_decisions`, compact memory in `ai_memory_summaries`, provider metadata in `ai_provider_responses`, and model-run progress in `arena_job_runs`
+9. repeats until Day 30
 
 The prompt/schema contract is exposed through `GET /api/arena/system-prompt`. Exact OpenRouter model IDs are pass-through inputs to `POST /api/arena/runs`.
+
+Arena jobs are restart-resumable for jobs created under the persisted schema:
+
+```text
+POST /api/arena/runs
+GET  /api/arena/runs/:arenaId
+POST /api/arena/runs/:arenaId/resume
+```
+
+The resume path reloads the latest saved model run and continues from the current
+serialized `GameState`. The browser is a viewer, not the durable job queue.
+
+Completed AI runs are also exposed through `GET /api/arena/scoreboard`, which computes
+comparable business metrics directly from SQLite instead of relying on manually edited
+benchmark notes.
 
 ## Static Serving
 
