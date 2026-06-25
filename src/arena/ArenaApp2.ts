@@ -5,6 +5,7 @@ import { PRODUCT_NAME, PRODUCT_TAGLINE, SHOP_NAME, SHOP_LOCATION } from '../cons
 import sidebarHeroUrl from '../assets/arena2/sidebar-hero.jpg';
 import emptyStateUrl from '../assets/arena2/empty-state.jpg';
 import { adaptAiReplay } from './arena-adapter';
+import { filterOfficialBenchmarkRows } from './benchmark-roster';
 import { initProviderLogoFallbacks, renderBenchmarkModelCell } from './provider-brand';
 import { ArenaStage } from './ArenaStage';
 import {
@@ -151,7 +152,7 @@ export class ArenaApp2 {
   private async loadReplayIndex() {
     try {
       const response = await requestJson<ArenaReplayIndexResponse>('/api/arena/replays?status=complete&limit=40');
-      this.indexedReplays = response.replays;
+      this.indexedReplays = filterOfficialBenchmarkRows(response.replays);
       if (this.backendConnected) {
         this.statusError = false;
         this.statusMessage = this.indexedReplays.length > 0
@@ -347,7 +348,7 @@ export class ArenaApp2 {
 
   private allReplaySummaries() {
     const byRunId = new Map<string, ArenaReplaySummary>();
-    for (const replay of [...this.indexedReplays, ...this.recentReplays]) {
+    for (const replay of filterOfficialBenchmarkRows([...this.indexedReplays, ...this.recentReplays])) {
       const existing = byRunId.get(replay.runId);
       if (!existing || replay.daysCompleted > existing.daysCompleted) byRunId.set(replay.runId, replay);
     }

@@ -10,6 +10,7 @@ import type {
   SerializedGameState,
   StepRunResponse,
 } from '../src/types';
+import { filterOfficialBenchmarkRows } from '../src/arena/benchmark-roster';
 import { dedupeReplaySummariesByModel } from '../src/arena/replay-ranking';
 import { PRODUCTS } from '../src/constants/products';
 import { GameState } from '../src/game/GameState';
@@ -721,9 +722,11 @@ export class RunStore {
   }
 
   getArenaScoreboard(limit = 25) {
-    const replays = dedupeReplaySummariesByModel(
-      this.listAiReplaySummaries({ status: 'complete', limit: 300 })
-        .filter((replay) => replay.daysCompleted >= 30)
+    const replays = filterOfficialBenchmarkRows(
+      dedupeReplaySummariesByModel(
+        this.listAiReplaySummaries({ status: 'complete', limit: 300 })
+          .filter((replay) => replay.daysCompleted >= 30)
+      )
     ).slice(0, limit);
     return replays.map((replay) => {
       const timeline = this.getTimeline(replay.runId);
