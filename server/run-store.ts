@@ -578,7 +578,7 @@ export class RunStore {
       LEFT JOIN arena_job_runs ON arena_job_runs.run_id = game_runs.id
       WHERE ${filters.join(' AND ')}
       GROUP BY game_runs.id, ai_players.model
-      ORDER BY days_completed DESC, game_runs.updated_at DESC
+      ORDER BY game_runs.total_score DESC, days_completed DESC, game_runs.updated_at DESC
       LIMIT ?
     `).all(...args, limit) as Array<{
       run_id: string;
@@ -741,7 +741,7 @@ export class RunStore {
           ? Math.round(decisions.reduce((sum, decision) => sum + decision.latencyMs, 0) / decisions.length)
           : 0,
       };
-    });
+    }).sort((a, b) => b.score - a.score || b.daysCompleted - a.daysCompleted || Date.parse(b.savedAt) - Date.parse(a.savedAt));
   }
 
   private summarizeTimeline(timeline: DayLog[]) {

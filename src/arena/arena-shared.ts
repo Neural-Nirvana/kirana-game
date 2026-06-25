@@ -112,7 +112,31 @@ export function modelMatchesReplay(targetModel: string, replayModel: string) {
 }
 
 export function replaySummaryRank(replay: Pick<ArenaReplaySummary, 'daysCompleted' | 'score' | 'savedAt'>) {
-  return replay.daysCompleted * 1_000_000_000 + replay.score * 1_000 + Date.parse(replay.savedAt);
+  return replay.score * 1_000_000_000 + replay.daysCompleted * 1_000 + Date.parse(replay.savedAt);
+}
+
+export function compareByFinalScore(
+  a: Pick<ArenaReplaySummary, 'daysCompleted' | 'score' | 'savedAt'>,
+  b: Pick<ArenaReplaySummary, 'daysCompleted' | 'score' | 'savedAt'>
+) {
+  if (b.score !== a.score) return b.score - a.score;
+  if (b.daysCompleted !== a.daysCompleted) return b.daysCompleted - a.daysCompleted;
+  return Date.parse(b.savedAt) - Date.parse(a.savedAt);
+}
+
+export function replayScoreForPreset(replays: ArenaReplaySummary[], presetId: string) {
+  return replays.find((replay) => modelMatchesReplay(presetId, replay.model))?.score;
+}
+
+export function sortModelPresetsByScore(presets: ArenaModelPreset[], replays: ArenaReplaySummary[]) {
+  return [...presets].sort((a, b) => {
+    const scoreA = replayScoreForPreset(replays, a.id);
+    const scoreB = replayScoreForPreset(replays, b.id);
+    if (scoreA !== undefined && scoreB !== undefined) return scoreB - scoreA;
+    if (scoreA !== undefined) return -1;
+    if (scoreB !== undefined) return 1;
+    return 0;
+  });
 }
 
 export function compareReplaySummaries(
@@ -131,7 +155,7 @@ export function dedupeReplaySummariesByModel(replays: ArenaReplaySummary[]) {
       byModel.set(key, replay);
     }
   }
-  return [...byModel.values()].sort(compareReplaySummaries);
+  return [...byModel.values()].sort(compareByFinalScore);
 }
 
 export function dedupeScoreboardRows<T extends Pick<ArenaReplaySummary, 'model' | 'daysCompleted' | 'score' | 'savedAt'>>(
@@ -145,7 +169,7 @@ export function dedupeScoreboardRows<T extends Pick<ArenaReplaySummary, 'model' 
       byModel.set(key, row);
     }
   }
-  return [...byModel.values()].sort(compareReplaySummaries);
+  return [...byModel.values()].sort(compareByFinalScore);
 }
 
 export function loadRecentReplays(): ArenaReplaySummary[] {

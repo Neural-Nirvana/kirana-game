@@ -9,6 +9,7 @@ import {
   actionIcon,
   AUTO_ADVANCE_DELAY_MS,
   clamp,
+  compareByFinalScore,
   COMPLETE_REPLAY_DAYS,
   compactSentence,
   dayTone,
@@ -33,6 +34,7 @@ import {
   saveRecentReplays,
   shortId,
   signed,
+  sortModelPresetsByScore,
   weatherIcon,
   type ArenaPlaybackMode,
   type ArenaProfile,
@@ -551,11 +553,15 @@ export class ArenaApp2 {
       const existing = byRunId.get(replay.runId);
       if (!existing || replay.daysCompleted > existing.daysCompleted) byRunId.set(replay.runId, replay);
     }
-    return [...byRunId.values()].sort((a, b) => b.daysCompleted - a.daysCompleted || Date.parse(b.savedAt) - Date.parse(a.savedAt));
+    return [...byRunId.values()].sort(compareByFinalScore);
   }
 
   private featuredReplaySummaries() {
     return dedupeReplaySummariesByModel(this.allReplaySummaries());
+  }
+
+  private rankedModelPresets() {
+    return sortModelPresetsByScore(this.modelPresets, this.featuredReplaySummaries());
   }
 
   private completedReplayForModel(model: string) {
@@ -815,6 +821,7 @@ export class ArenaApp2 {
     const model = this.resolvedModel;
     const benchmarkReplay = this.completedReplayForModel(model);
     const replays = this.featuredReplaySummaries();
+    const rankedPresets = this.rankedModelPresets();
     const totalReplayRuns = this.allReplaySummaries().length;
     const run = this.arenaJob ? primaryRun(this.arenaJob) : undefined;
     const completedDays = this.run?.days.length ?? run?.decisions.length ?? 0;
@@ -839,8 +846,9 @@ export class ArenaApp2 {
             <h2>Run Setup</h2>
             <p class="a2-hint">One JSON plan per day. Backend simulates customers and scores results.</p>
             <div class="a2-model-list">
-              ${this.modelPresets.slice(0, 8).map((preset) => {
-                const hasReplay = Boolean(this.completedReplayForModel(preset.id));
+              ${rankedPresets.map((preset) => {
+                const benchmark = this.completedReplayForModel(preset.id);
+                const hasReplay = Boolean(benchmark);
                 return `
                   <button
                     class="a2-model-btn ${model === preset.id ? 'active' : ''} ${hasReplay ? 'has-replay' : ''}"
@@ -850,7 +858,7 @@ export class ArenaApp2 {
                   >
                     <strong>${escapeHtml(preset.label)}</strong>
                     <span>${escapeHtml(compactSentence(preset.note, 48))}</span>
-                    ${hasReplay ? '<em>30-day replay</em>' : ''}
+                    ${hasReplay ? `<em>30-day replay · ${signed(benchmark!.score)}</em>` : ''}
                   </button>
                 `;
               }).join('')}

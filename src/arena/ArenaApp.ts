@@ -1,8 +1,10 @@
 import { PRODUCT_NAME, PRODUCT_TAGLINE, SHOP_NAME } from '../constants/brand';
 import { adaptAiReplay } from './arena-adapter';
 import {
+  compareByFinalScore,
   dedupeReplaySummariesByModel,
   modelMatchesReplay,
+  sortModelPresetsByScore,
 } from './arena-shared';
 import { ArenaStage } from './ArenaStage';
 import { DEFAULT_NEIGHBORHOOD_PROFILE } from '../constants/neighborhood';
@@ -507,12 +509,15 @@ export class ArenaApp {
       const existing = byRunId.get(replay.runId);
       if (!existing || replay.daysCompleted > existing.daysCompleted) byRunId.set(replay.runId, replay);
     }
-    return [...byRunId.values()]
-      .sort((a, b) => b.daysCompleted - a.daysCompleted || Date.parse(b.savedAt) - Date.parse(a.savedAt));
+    return [...byRunId.values()].sort(compareByFinalScore);
   }
 
   private featuredReplaySummaries() {
     return dedupeReplaySummariesByModel(this.allReplaySummaries());
+  }
+
+  private rankedModelPresets() {
+    return sortModelPresetsByScore(this.modelPresets, this.featuredReplaySummaries());
   }
 
   private completedReplayForModel(model: string) {
@@ -777,7 +782,7 @@ export class ArenaApp {
           <button data-arena-action="close-model-picker" type="button">Close</button>
         </div>
         <div class="arena-model-grid">
-          ${this.modelPresets.slice(0, 10).map((preset) => {
+          ${this.rankedModelPresets().map((preset) => {
             const benchmarkReplay = this.completedReplayForModel(preset.id);
             return `
               <button
