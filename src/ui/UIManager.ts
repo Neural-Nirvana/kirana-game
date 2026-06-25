@@ -274,7 +274,7 @@ export class UIManager {
             <div class="intro-copy">
               <span class="intro-eyebrow">AI Nagar: Kirana Street · Episode 1</span>
               <h1 class="opening-title">${STORE_NAME}</h1>
-              <p class="opening-subtitle">Run ${STORE_SHORT_NAME} for 30 days. Read street signals, buy stock, serve visitors, manage khata, and earn rewards.</p>
+              <p class="opening-subtitle">Run ${STORE_SHORT_NAME} for 30 days. Each night you read tomorrow’s situation, place the supplier order, and your plan is saved to help train the shop AI.</p>
             </div>
 
             <div class="intro-stat-grid">
@@ -304,8 +304,8 @@ export class UIManager {
               </article>
               <article>
                 <span>2</span>
-                <strong>Stock shelves</strong>
-                <em>Buy enough for demand without trapping cash or wasting perishables.</em>
+                <strong>Order for tomorrow</strong>
+                <em>Supplier orders are placed tonight. Stock lands on the opening shelf before customers arrive.</em>
               </article>
               <article>
                 <span>3</span>
@@ -342,7 +342,7 @@ export class UIManager {
             <div class="intro-shop-head">
               <span>First decision</span>
               <strong>Empty shelves, ₹${DEFAULT_CONFIG.startingCash.toLocaleString()} cash</strong>
-              <em>Choose the first stock mix before Day 1 visitors enter ${STORE_SHORT_NAME}.</em>
+              <em>Your opening order is placed today and becomes Day 1 shelf stock — not a mid-day delivery.</em>
             </div>
             ${this.renderIntroShelf()}
             <div class="intro-score-preview">
@@ -762,11 +762,137 @@ export class UIManager {
     `;
   }
 
-  private renderDecisionChip(label: string, value: string, tone: 'calendar' | 'positive' | 'warning' | 'negative'): string {
+  private renderCrowdsourceMissionBanner(): string {
     return `
-      <div class="decision-chip ${tone}">
-        <span>${label}</span>
-        <strong>${value}</strong>
+      <div class="crowdsource-mission-banner" role="note">
+        <span class="crowdsource-mission-icon" aria-hidden="true">◎</span>
+        <div>
+          <strong>Your nightly plan trains the shop AI</strong>
+          <span>Every order, offer, khata reminder, and campaign you lock is saved anonymously for fine-tuning — play honestly from the signals below.</span>
+        </div>
+      </div>
+    `;
+  }
+
+  private renderSupplierLeadTimeCallout(planningDay: number, mode: 'opening' | 'overnight'): string {
+    const targetDay = mode === 'opening' ? 1 : planningDay;
+    const timingLabel = mode === 'opening'
+      ? 'Before Day 1 opens'
+      : `Tonight · before Day ${targetDay}`;
+
+    return `
+      <section class="supplier-leadtime-callout" aria-label="How supplier orders work">
+        <div class="supplier-leadtime-head">
+          <span>${timingLabel}</span>
+          <strong>Orders are placed one day early</strong>
+          <em>The wholesaler does not deliver while customers are shopping. You decide now; stock appears on tomorrow’s opening shelf.</em>
+        </div>
+        <div class="supplier-leadtime-flow" aria-hidden="true">
+          <div class="leadtime-step you">
+            <span>You decide</span>
+            <strong>Tonight</strong>
+          </div>
+          <div class="leadtime-arrow">→</div>
+          <div class="leadtime-step supplier">
+            <span>Supplier</span>
+            <strong>Delivers</strong>
+          </div>
+          <div class="leadtime-arrow">→</div>
+          <div class="leadtime-step shelf">
+            <span>Opening shelf</span>
+            <strong>Day ${String(targetDay).padStart(2, '0')}</strong>
+          </div>
+          <div class="leadtime-arrow">→</div>
+          <div class="leadtime-step customers">
+            <span>Customers</span>
+            <strong>Arrive</strong>
+          </div>
+        </div>
+        <p class="supplier-leadtime-formula">
+          <strong>Opening stock for Day ${targetDay}</strong> = what’s left on the shelf tonight + units in your saved cart (minus removals).
+        </p>
+      </section>
+    `;
+  }
+
+  private renderTomorrowSituationScene(
+    environment: EnvironmentSignalReport,
+    options: {
+      planningDay: number;
+      result?: DayResult;
+      headline?: string;
+      mode: 'opening' | 'overnight';
+    }
+  ): string {
+    const weather = environment.tomorrowWeather;
+    const customerLead = environment.customerSignals[0] ?? 'Walk-in rhythm expected tomorrow.';
+    const marketLead = environment.marketSignals[0] ?? 'Routine demand is the baseline.';
+    const memoryLead = environment.shopMemorySignals[0] ?? 'Use yesterday’s sold and missed counts before ordering.';
+    const calendarLead = environment.calendarSignals[1] ?? environment.calendarSignals[0] ?? environment.weekLabel;
+    const missedToday = options.result ? this.getTotalMissedDemand(options.result) : 0;
+    const scoreToday = options.result?.rewardBreakdown.total;
+    const headline = options.headline ?? (
+      options.mode === 'opening'
+        ? `${this.weatherLabel(weather.weather)} opening day — set the first impression`
+        : `${this.weatherLabel(weather.weather)} Day ${options.planningDay} — ${missedToday > 0 ? 'restock what you missed' : 'protect what worked'}`
+    );
+
+    return `
+      <section class="tomorrow-situation-scene" aria-label="Tomorrow's situation">
+        <div class="situation-scene-visual ${weather.weather}">
+          <div class="situation-weather-hero" aria-hidden="true">
+            <span class="situation-weather-glyph">${this.weatherIcon(weather.weather)}</span>
+            <span class="situation-weather-temp">${weather.temperature}°C</span>
+          </div>
+          <div class="situation-scene-copy">
+            <span class="situation-eyebrow">${options.mode === 'opening' ? 'Day 01 brief' : `Plan for Day ${options.planningDay}`} · ${environment.dayName} ${environment.dateLabel}</span>
+            <h2 class="situation-headline">${headline}</h2>
+            <p class="situation-subline">${customerLead}</p>
+            ${options.result ? `
+              <div class="situation-yesterday-pill ${(scoreToday ?? 0) >= 0 ? 'good' : 'bad'}">
+                <span>Yesterday</span>
+                <strong>${this.formatSignedNumber(scoreToday ?? 0)} score</strong>
+                <em>${missedToday > 0 ? `${missedToday} units missed` : 'no missed demand'} · trust ${Math.round(options.result.trust)}%</em>
+              </div>
+            ` : ''}
+          </div>
+        </div>
+        <div class="situation-scene-cards">
+          <article class="situation-card">
+            <span>Who may come</span>
+            <strong>Footfall</strong>
+            <p>${customerLead}</p>
+          </article>
+          <article class="situation-card">
+            <span>What may sell</span>
+            <strong>Market</strong>
+            <p>${marketLead}</p>
+          </article>
+          <article class="situation-card">
+            <span>Calendar</span>
+            <strong>${environment.weekendText}</strong>
+            <p>${calendarLead}</p>
+          </article>
+          <article class="situation-card">
+            <span>From the shelf</span>
+            <strong>Memory</strong>
+            <p>${memoryLead}</p>
+          </article>
+        </div>
+        <div class="situation-week-strip">
+          ${environment.week.slice(0, 5).map((day) => this.renderInsightWeatherCard(day)).join('')}
+        </div>
+      </section>
+    `;
+  }
+
+  private renderYesterdayCompactStrip(result: DayResult, state: GameState): string {
+    const financials = this.getFinancialSummary(result, state);
+    return `
+      <div class="yesterday-compact-strip">
+        <span>Day ${String(result.day).padStart(2, '0')} closed</span>
+        <strong class="${result.rewardBreakdown.total >= 0 ? 'positive' : 'negative'}">${this.formatSignedNumber(result.rewardBreakdown.total)} today</strong>
+        <em>Profit ${this.formatSignedCurrency(financials.operatingProfit)} · Cash ₹${result.cash.toLocaleString()} · Trust ${Math.round(result.trust)}%</em>
       </div>
     `;
   }
@@ -833,102 +959,96 @@ export class UIManager {
         ? this.renderAIInsightLoader()
         : this.renderAIInsightPlaceholder();
 
+    const planningDay = state.day + 1;
+
     return `
-      <section class="panel executive-summary insight-brief-panel">
-        <div class="decision-hero-bar">
-          <div class="decision-title-lockup">
-            <div class="decision-app-icon" aria-hidden="true">
-              <span></span><span></span><span></span>
-            </div>
-            <h2 class="case-title">${STORE_SHORT_NAME} Report</h2>
+      <section class="panel executive-summary insight-brief-panel planning-flow-panel">
+        ${this.renderCrowdsourceMissionBanner()}
+        ${this.renderTomorrowSituationScene(environment, {
+          planningDay,
+          result,
+          headline: decisionHeadline,
+          mode: 'overnight',
+        })}
+        ${this.renderSupplierLeadTimeCallout(planningDay, 'overnight')}
+        ${this.renderYesterdayCompactStrip(result, state)}
+
+        <section class="planning-action-zone">
+          <div class="planning-action-head">
+            <span>Step 2 · Your supplier cart</span>
+            <strong>Tap items to add stock for tomorrow’s opening shelf</strong>
+            <em>Removals, offers, khata reminders, and marketing sit below the shelf cards.</em>
           </div>
-          <div class="decision-status-chips">
-            ${this.renderDecisionChip('Day', String(result.day).padStart(2, '0'), 'calendar')}
-            ${this.renderDecisionChip('Plan', environment.dayName, 'calendar')}
-            ${this.renderDecisionChip('Trust', `${Math.round(result.trust)}%`, result.trustChange >= 0 ? 'positive' : 'warning')}
-            ${this.renderDecisionChip('Profit', this.formatSignedCurrency(financials.operatingProfit), financials.operatingProfit >= 0 ? 'positive' : 'negative')}
-            ${this.renderDecisionChip('Cash', `₹${result.cash.toLocaleString()}`, 'positive')}
-          </div>
-        </div>
+          ${this.renderInsightInventoryStatus(result, state)}
+          ${this.renderMarketingBoard(state, planningDay)}
+          ${this.renderInsightPlanDock(result, state)}
+        </section>
 
-        <div class="decision-alert-banner ${totalMissed > 0 ? 'negative' : 'positive'}">
-          <div class="decision-weather-icon ${environment.tomorrowWeather.weather}" aria-hidden="true">${this.weatherIcon(environment.tomorrowWeather.weather)}</div>
-          <div>
-            <strong>${decisionHeadline}</strong>
-            <span>${shopStatus.detail}${events.length > 0 ? ` · ${events[0].title}: ${events[0].text}` : ''}</span>
-          </div>
-        </div>
-
-        <div class="executive-groups insight-metric-groups">
-          ${this.renderExecutiveGroup(
-            'Money',
-            moneyMain,
-            moneyLabel,
-            financials.operatingProfit >= 0 ? 'positive' : 'negative',
-            [
-              { label: 'Revenue', value: `₹${financials.revenue.toLocaleString()}`, tone: financials.revenue > 0 ? 'positive' : 'neutral' },
-              { label: 'Gross margin', value: `₹${financials.grossMargin.toLocaleString()}`, tone: financials.grossMargin >= 0 ? 'positive' : 'negative' },
-              { label: 'Cash change', value: this.formatSignedCurrency(financials.cashChange), tone: financials.cashChange >= 0 ? 'positive' : 'negative' },
-              { label: 'Khata due', value: `₹${khataDue.toLocaleString()}`, tone: khataDue > 0 ? 'warning' : 'positive' },
-            ],
-            `Cash now ₹${result.cash.toLocaleString()} · stock bought ₹${financials.purchaseSpend.toLocaleString()} · losses ₹${losses.toLocaleString()}`
-          )}
-          ${this.renderExecutiveGroup(
-            'Inventory',
-            itemMain,
-            itemLabel,
-            inventoryTone,
-            [
-              { label: 'Sold', value: `${totalSold}`, tone: totalSold > 0 ? 'positive' : 'neutral' },
-              { label: 'Stockout SKUs', value: `${result.stockouts}`, tone: result.stockouts > 0 ? inventoryShortageTone : 'positive' },
-              { label: 'Lost sales', value: `₹${missedRevenue.toLocaleString()}`, tone: missedRevenue > 0 ? inventoryShortageTone : 'positive' },
-              { label: 'Perishable risk', value: `₹${perishabilityRiskCost.toLocaleString()}`, tone: perishabilityRiskCost > 0 ? 'warning' : 'positive' },
-            ],
-            `${perishabilityRiskUnits} risk-weighted units · ${stockoutDays} stockout days so far`
-          )}
-          ${this.renderExecutiveGroup(
-            'Visits',
-            customerMain,
-            customerLabel,
-            attentionVisits > 0 ? 'negative' : 'positive',
-            [
-              { label: 'Visited', value: `${result.customerVisits.length}`, tone: 'neutral' },
-              { label: 'Fully served', value: `${fulfilledVisits}`, tone: fulfilledVisits === result.customerVisits.length ? 'positive' : 'warning' },
-              { label: 'Trust', value: `${Math.round(result.trust)}%`, tone: result.trustChange >= 0 ? 'positive' : 'negative' },
-              { label: 'Khata visits', value: `${khataVisits}`, tone: khataVisits > 0 ? 'warning' : 'positive' },
-            ],
-            `Trust ${this.formatSignedNumber(result.trustChange)} pts today · regulars kept ${regularsKept}/${state.customers.length} · ${cashCrisisDays} cash crisis days`
-          )}
-          ${this.renderExecutiveGroup(
-            'Rewards',
-            rewardMain,
-            'today score',
-            rewardTone,
-            [
-              { label: 'Service', value: this.formatSignedNumber(result.rewardBreakdown.service), tone: result.rewardBreakdown.service >= 0 ? 'positive' : 'negative' },
-              { label: 'Inventory', value: this.formatSignedNumber(result.rewardBreakdown.inventory), tone: result.rewardBreakdown.inventory >= 0 ? 'positive' : 'negative' },
-              { label: 'Money', value: this.formatSignedNumber(result.rewardBreakdown.money), tone: result.rewardBreakdown.money >= 0 ? 'positive' : 'negative' },
-              { label: 'Trust', value: this.formatSignedNumber(result.rewardBreakdown.relationships), tone: result.rewardBreakdown.relationships >= 0 ? 'positive' : 'negative' },
-              { label: 'Marketing', value: this.formatSignedNumber(result.rewardBreakdown.marketing), tone: result.rewardBreakdown.marketing > 0 ? 'positive' : result.rewardBreakdown.marketing < 0 ? 'negative' : 'neutral' },
-            ],
-            rewardNote
-          )}
-        </div>
-
-        ${this.renderCollapsibleInsightSignals(environment, aiInsightBlock, 'Environment signals')}
-        ${this.renderInsightInventoryStatus(result, state)}
-        ${this.renderMarketingBoard(state, state.day + 1)}
-        ${this.renderInsightPlanDock(result, state)}
-        ${this.renderInsightCustomerExceptions(result)}
-        ${this.renderInventoryLedgerDetails(result)}
-
-        <details class="score-details">
+        <details class="yesterday-report-drawer score-details">
           <summary>
-            <span>Today’s score</span>
+            <span>Yesterday’s full report</span>
             <strong class="${result.rewardBreakdown.total >= 0 ? 'positive' : 'negative'}">${this.formatSignedNumber(result.rewardBreakdown.total)}</strong>
-            <em>Service, inventory, money, relationships, marketing, operations, and penalties</em>
+            <em>${shopStatus.detail}${events.length > 0 ? ` · ${events[0].title}` : ''}</em>
           </summary>
           <div class="score-details-body">
+            <div class="executive-groups insight-metric-groups">
+              ${this.renderExecutiveGroup(
+                'Money',
+                moneyMain,
+                moneyLabel,
+                financials.operatingProfit >= 0 ? 'positive' : 'negative',
+                [
+                  { label: 'Revenue', value: `₹${financials.revenue.toLocaleString()}`, tone: financials.revenue > 0 ? 'positive' : 'neutral' },
+                  { label: 'Gross margin', value: `₹${financials.grossMargin.toLocaleString()}`, tone: financials.grossMargin >= 0 ? 'positive' : 'negative' },
+                  { label: 'Cash change', value: this.formatSignedCurrency(financials.cashChange), tone: financials.cashChange >= 0 ? 'positive' : 'negative' },
+                  { label: 'Khata due', value: `₹${khataDue.toLocaleString()}`, tone: khataDue > 0 ? 'warning' : 'positive' },
+                ],
+                `Cash now ₹${result.cash.toLocaleString()} · stock bought ₹${financials.purchaseSpend.toLocaleString()} · losses ₹${losses.toLocaleString()}`
+              )}
+              ${this.renderExecutiveGroup(
+                'Inventory',
+                itemMain,
+                itemLabel,
+                inventoryTone,
+                [
+                  { label: 'Sold', value: `${totalSold}`, tone: totalSold > 0 ? 'positive' : 'neutral' },
+                  { label: 'Stockout SKUs', value: `${result.stockouts}`, tone: result.stockouts > 0 ? inventoryShortageTone : 'positive' },
+                  { label: 'Lost sales', value: `₹${missedRevenue.toLocaleString()}`, tone: missedRevenue > 0 ? inventoryShortageTone : 'positive' },
+                  { label: 'Perishable risk', value: `₹${perishabilityRiskCost.toLocaleString()}`, tone: perishabilityRiskCost > 0 ? 'warning' : 'positive' },
+                ],
+                `${perishabilityRiskUnits} risk-weighted units · ${stockoutDays} stockout days so far`
+              )}
+              ${this.renderExecutiveGroup(
+                'Visits',
+                customerMain,
+                customerLabel,
+                attentionVisits > 0 ? 'negative' : 'positive',
+                [
+                  { label: 'Visited', value: `${result.customerVisits.length}`, tone: 'neutral' },
+                  { label: 'Fully served', value: `${fulfilledVisits}`, tone: fulfilledVisits === result.customerVisits.length ? 'positive' : 'warning' },
+                  { label: 'Trust', value: `${Math.round(result.trust)}%`, tone: result.trustChange >= 0 ? 'positive' : 'negative' },
+                  { label: 'Khata visits', value: `${khataVisits}`, tone: khataVisits > 0 ? 'warning' : 'positive' },
+                ],
+                `Trust ${this.formatSignedNumber(result.trustChange)} pts today · regulars kept ${regularsKept}/${state.customers.length} · ${cashCrisisDays} cash crisis days`
+              )}
+              ${this.renderExecutiveGroup(
+                'Rewards',
+                rewardMain,
+                'today score',
+                rewardTone,
+                [
+                  { label: 'Service', value: this.formatSignedNumber(result.rewardBreakdown.service), tone: result.rewardBreakdown.service >= 0 ? 'positive' : 'negative' },
+                  { label: 'Inventory', value: this.formatSignedNumber(result.rewardBreakdown.inventory), tone: result.rewardBreakdown.inventory >= 0 ? 'positive' : 'negative' },
+                  { label: 'Money', value: this.formatSignedNumber(result.rewardBreakdown.money), tone: result.rewardBreakdown.money >= 0 ? 'positive' : 'negative' },
+                  { label: 'Trust', value: this.formatSignedNumber(result.rewardBreakdown.relationships), tone: result.rewardBreakdown.relationships >= 0 ? 'positive' : 'negative' },
+                  { label: 'Marketing', value: this.formatSignedNumber(result.rewardBreakdown.marketing), tone: result.rewardBreakdown.marketing > 0 ? 'positive' : result.rewardBreakdown.marketing < 0 ? 'negative' : 'neutral' },
+                ],
+                rewardNote
+              )}
+            </div>
+            ${this.renderCollapsibleInsightSignals(environment, aiInsightBlock, 'Extra signals')}
+            ${this.renderInsightCustomerExceptions(result)}
+            ${this.renderInventoryLedgerDetails(result)}
             <div class="score-chip-row">
               ${this.renderScoreChip('Service', result.rewardBreakdown.service, 'positive')}
               ${this.renderScoreChip('Inventory', result.rewardBreakdown.inventory, 'positive')}
@@ -938,10 +1058,6 @@ export class UIManager {
               ${this.renderScoreChip('Operations', result.rewardBreakdown.operations, 'positive')}
               ${this.renderScoreChip('Penalties', result.rewardBreakdown.penalties, result.rewardBreakdown.penalties < 0 ? 'negative' : 'neutral')}
               ${this.renderScoreChip('Total', result.rewardBreakdown.total, result.rewardBreakdown.total >= 0 ? 'positive' : 'negative')}
-            </div>
-            <div class="score-details-meta">
-              ${rewards.length > 0 ? `<span>Rewards: ${rewards.map((reward) => reward.title).join(', ')}</span>` : '<span>No new rewards today</span>'}
-              <span>${result.difficulty.focus}</span>
             </div>
           </div>
         </details>
@@ -981,91 +1097,109 @@ export class UIManager {
         : this.renderAIInsightPlaceholder();
 
     return `
-      <section class="panel opening-decision-panel insight-brief-panel">
-        <div class="decision-hero-bar opening-hero-bar">
-          <div class="decision-title-lockup">
-            <div class="decision-app-icon" aria-hidden="true">
-              <span></span><span></span><span></span>
-            </div>
-            <div>
-              <div class="case-eyebrow">Before Day 01</div>
-              <h2 class="case-title">Opening Brief</h2>
-            </div>
-          </div>
-          <div class="decision-status-chips">
-            ${this.renderDecisionChip('Day', '01', 'calendar')}
-            ${this.renderDecisionChip('Plan', environment.dayName, 'calendar')}
-            ${this.renderDecisionChip('Weather', `${this.weatherLabel(environment.tomorrowWeather.weather)} ${environment.tomorrowWeather.temperature}°C`, environment.tomorrowWeather.weather === 'rainy' ? 'warning' : 'positive')}
-            ${this.renderDecisionChip('Capital', `₹${state.cash.toLocaleString()}`, 'positive')}
-            ${this.renderDecisionChip('After plan', `₹${Math.round(cashAfterOrder).toLocaleString()}`, cashTone)}
-          </div>
-        </div>
-
-        <div class="decision-alert-banner opening-alert ${cashTone}">
-          <div class="decision-weather-icon ${environment.tomorrowWeather.weather}" aria-hidden="true">${this.weatherIcon(environment.tomorrowWeather.weather)}</div>
-          <div>
-            <strong>Your first order sets Day 1 trust</strong>
-            <span>Start with essentials, keep a cash buffer, then compare sold, missed, closing stock, khata, and score after the day ends.</span>
-          </div>
-        </div>
-
-        <div class="executive-groups opening-metric-groups">
-          ${this.renderExecutiveGroup(
-            'Money',
-            `₹${state.cash.toLocaleString()}`,
-            'starting capital',
-            cashTone,
-            [
-              { label: 'Plan cost', value: `₹${totalPlanCost.toLocaleString()}`, tone: totalPlanCost > 0 ? 'neutral' : 'warning' },
-              { label: 'Cash after', value: `₹${Math.round(cashAfterOrder).toLocaleString()}`, tone: cashTone },
-              { label: 'Reserve target', value: `₹${this.cashReserve.toLocaleString()}`, tone: reserveOk ? 'positive' : 'warning' },
-              { label: 'Gross margin', value: `₹${possibleMargin.toLocaleString()}`, tone: possibleMargin > 0 ? 'positive' : 'neutral' },
-            ],
-            'Cash is your correction power for Day 2.'
-          )}
-          ${this.renderExecutiveGroup(
-            'Shelves',
-            `${plannedUnits}`,
-            'units planned',
-            plannedUnits > 0 ? 'positive' : 'negative',
-            [
-              { label: 'SKUs planned', value: `${plannedSkus}/${PRODUCTS.length}`, tone: plannedSkus > 0 ? 'positive' : 'negative' },
-              { label: 'Essentials', value: `${essentialSkus}`, tone: essentialSkus >= 4 ? 'positive' : 'warning' },
-              { label: 'Perishables', value: `${perishableSkus}`, tone: perishableSkus > 0 ? 'warning' : 'neutral' },
-              { label: 'Fridge used', value: `${projectedFridgePct}%`, tone: projectedFridgePct <= 100 ? 'positive' : 'negative' },
-            ],
-            'Empty shelves miss demand; too much fresh stock can waste.'
-          )}
-          ${this.renderExecutiveGroup(
-            'Customers',
-            `${state.customers.length}`,
-            'known patterns',
-            'warning',
-            [
-              { label: 'Regulars', value: `${regularCustomers}`, tone: regularCustomers > 0 ? 'positive' : 'neutral' },
-              { label: 'Students', value: `${studentCustomers}`, tone: studentCustomers > 0 ? 'warning' : 'neutral' },
-              { label: 'Trust starts', value: `${state.trust}%`, tone: 'positive' },
-              { label: 'Khata due', value: `₹${this.getTotalKhataDue(state).toLocaleString()}`, tone: 'positive' },
-            ],
-            'Regulars test essentials first; walk-ins still buy quick items.'
-          )}
-        </div>
-
-        ${this.renderOpeningRewardsGuide({
-          reserveOk,
-          essentialSkus,
-          perishableSkus,
-          projectedFridgePct,
-          marketingCost,
+      <section class="panel opening-decision-panel insight-brief-panel planning-flow-panel">
+        ${this.renderCrowdsourceMissionBanner()}
+        ${this.renderTomorrowSituationScene(environment, { planningDay: 1, mode: 'opening' })}
+        ${this.renderSupplierLeadTimeCallout(1, 'opening')}
+        ${this.renderOpeningCapitalStrip(state, {
+          totalPlanCost,
           plannedUnits,
+          plannedSkus,
+          cashAfterOrder,
+          cashTone,
         })}
-        ${this.renderCollapsibleInsightSignals(environment, aiInsightBlock, 'Day 1 signals')}
-        ${this.renderOpeningShelfPreview(state)}
 
-        ${this.renderMarketingBoard(state, state.day)}
-        ${this.renderOpeningPlanDock(state)}
-        ${this.renderOpeningPlaybook()}
+        <section class="planning-action-zone">
+          <div class="planning-action-head">
+            <span>Step 2 · Your supplier cart</span>
+            <strong>Tap items to build Day 1 opening shelf stock</strong>
+            <em>Orders placed tonight land before customers arrive — not during the day.</em>
+          </div>
+          ${this.renderOpeningShelfPreview(state)}
+          ${this.renderMarketingBoard(state, state.day)}
+          ${this.renderOpeningPlanDock(state)}
+        </section>
+
+        <details class="yesterday-report-drawer score-details opening-prep-drawer">
+          <summary>
+            <span>Day 1 prep details</span>
+            <strong class="${cashTone}">₹${Math.round(cashAfterOrder).toLocaleString()} after plan</strong>
+            <em>${plannedSkus} SKUs · ${plannedUnits} units · trust starts ${state.trust}%</em>
+          </summary>
+          <div class="score-details-body">
+            <div class="executive-groups opening-metric-groups">
+              ${this.renderExecutiveGroup(
+                'Money',
+                `₹${state.cash.toLocaleString()}`,
+                'starting capital',
+                cashTone,
+                [
+                  { label: 'Plan cost', value: `₹${totalPlanCost.toLocaleString()}`, tone: totalPlanCost > 0 ? 'neutral' : 'warning' },
+                  { label: 'Cash after', value: `₹${Math.round(cashAfterOrder).toLocaleString()}`, tone: cashTone },
+                  { label: 'Reserve target', value: `₹${this.cashReserve.toLocaleString()}`, tone: reserveOk ? 'positive' : 'warning' },
+                  { label: 'Gross margin', value: `₹${possibleMargin.toLocaleString()}`, tone: possibleMargin > 0 ? 'positive' : 'neutral' },
+                ],
+                'Cash is your correction power for Day 2.'
+              )}
+              ${this.renderExecutiveGroup(
+                'Shelves',
+                `${plannedUnits}`,
+                'units planned',
+                plannedUnits > 0 ? 'positive' : 'negative',
+                [
+                  { label: 'SKUs planned', value: `${plannedSkus}/${PRODUCTS.length}`, tone: plannedSkus > 0 ? 'positive' : 'negative' },
+                  { label: 'Essentials', value: `${essentialSkus}`, tone: essentialSkus >= 4 ? 'positive' : 'warning' },
+                  { label: 'Perishables', value: `${perishableSkus}`, tone: perishableSkus > 0 ? 'warning' : 'neutral' },
+                  { label: 'Fridge used', value: `${projectedFridgePct}%`, tone: projectedFridgePct <= 100 ? 'positive' : 'negative' },
+                ],
+                'Empty shelves miss demand; too much fresh stock can waste.'
+              )}
+              ${this.renderExecutiveGroup(
+                'Customers',
+                `${state.customers.length}`,
+                'known patterns',
+                'warning',
+                [
+                  { label: 'Regulars', value: `${regularCustomers}`, tone: regularCustomers > 0 ? 'positive' : 'neutral' },
+                  { label: 'Students', value: `${studentCustomers}`, tone: studentCustomers > 0 ? 'warning' : 'neutral' },
+                  { label: 'Trust starts', value: `${state.trust}%`, tone: 'positive' },
+                  { label: 'Khata due', value: `₹${this.getTotalKhataDue(state).toLocaleString()}`, tone: 'positive' },
+                ],
+                'Regulars test essentials first; walk-ins still buy quick items.'
+              )}
+            </div>
+            ${this.renderOpeningRewardsGuide({
+              reserveOk,
+              essentialSkus,
+              perishableSkus,
+              projectedFridgePct,
+              marketingCost,
+              plannedUnits,
+            })}
+            ${this.renderCollapsibleInsightSignals(environment, aiInsightBlock, 'Day 1 signals')}
+            ${this.renderOpeningPlaybook()}
+          </div>
+        </details>
       </section>
+    `;
+  }
+
+  private renderOpeningCapitalStrip(
+    state: GameState,
+    plan: {
+      totalPlanCost: number;
+      plannedUnits: number;
+      plannedSkus: number;
+      cashAfterOrder: number;
+      cashTone: 'positive' | 'warning' | 'negative';
+    }
+  ): string {
+    return `
+      <div class="yesterday-compact-strip opening-capital-strip">
+        <span>Opening night · ₹${state.cash.toLocaleString()} cash</span>
+        <strong class="${plan.cashTone}">₹${Math.round(plan.cashAfterOrder).toLocaleString()} after cart</strong>
+        <em>${plan.plannedSkus} SKUs · ${plan.plannedUnits} units · cart ₹${plan.totalPlanCost.toLocaleString()}</em>
+      </div>
     `;
   }
 
@@ -1492,8 +1626,8 @@ export class UIManager {
       <section class="insight-inventory-panel">
         <div class="insight-panel-head">
           <div>
-            <span>Shelf Check</span>
-            <strong>Closing stock after today’s visits</strong>
+            <span>Shelf check</span>
+            <strong>Tonight’s shelf + what to order</strong>
           </div>
           <div class="inventory-status-legend">
             <span><i class="legend-dot positive"></i>Good</span>
@@ -1504,6 +1638,7 @@ export class UIManager {
         <div class="insight-inventory-grid">
           ${rows.map((row) => this.renderInsightInventoryCard(row.product, row.currentStock, row.movement, row.perishability, row.status)).join('')}
         </div>
+        <p class="insight-inventory-hint">Leftover stock carries over. Supplier units you add land on tomorrow’s opening shelf only.</p>
         <div class="insight-guidance-strip">
           ${this.renderInsightGuidanceChip('Restock essentials', this.getTotalMissedDemand(result) > 0 ? 'negative' : 'positive')}
           ${this.renderInsightGuidanceChip('Keep cash buffer', result.cash >= this.cashReserve ? 'positive' : 'warning')}
@@ -1698,7 +1833,7 @@ export class UIManager {
           <button class="btn btn-outline" id="btn-starter-mix">Starter Mix</button>
           <button class="btn btn-outline" id="btn-clear-initial">Clear</button>
           <button class="btn btn-success initial-open-btn" id="btn-open-day-one" ${canOpen ? '' : 'disabled'}>
-            Open Shop for Day 1
+            Submit opening order for Day 1
           </button>
         </div>
       </div>
@@ -1709,9 +1844,9 @@ export class UIManager {
     return `
       <section class="insight-plan-dock opening-plan-dock" id="opening-plan-dock">
         <div class="decision-rail-head">
-          <span>Opening plan</span>
-          <strong>Cash, shelf mix, and first impression</strong>
-          <em>Balance shelf depth with enough cash for tomorrow.</em>
+          <span>Step 3 · Lock opening order</span>
+          <strong>Submit order for Day 1</strong>
+          <em>You decide tonight → supplier delivers → Day 1 opening shelf. Your choices are saved for AI training.</em>
         </div>
         ${this.renderInitialBudgetPanel(state)}
       </section>
@@ -1725,10 +1860,10 @@ export class UIManager {
       <section class="insight-plan-dock" id="insight-plan-dock">
           <div class="case-section-head">
             <div>
-              <div class="panel-header">${isFinalDay ? 'End of Simulation' : `Tomorrow Plan · Day ${state.day + 1}`}</div>
-            <h3>${isFinalDay ? 'Close the books' : 'Saved cart, rewards, khata, and commitments'}</h3>
+              <div class="panel-header">${isFinalDay ? 'End of Simulation' : `Step 3 · Lock order for Day ${state.day + 1}`}</div>
+            <h3>${isFinalDay ? 'Close the books' : 'Submit supplier order for tomorrow'}</h3>
             </div>
-          ${!isFinalDay ? `<div class="case-section-meta">Add item changes to the wholesaler cart first; opening the next day uses only saved choices.</div>` : ''}
+          ${!isFinalDay ? `<div class="case-section-meta">You decide tonight → stock lands on Day ${state.day + 1} opening shelf. Khata reminders, offers, and marketing lock with your cart.</div>` : ''}
         </div>
         ${isFinalDay ? this.renderFinalDayAction() : `
           ${this.renderInventoryDiagnosticStrip(result, state)}
@@ -1740,21 +1875,21 @@ export class UIManager {
           </div>
           <aside class="decision-bottom-bar" aria-label="Plan summary">
             <div class="decision-bottom-copy">
-              <span>Saved plan</span>
-              <strong>Open Day ${state.day + 1}</strong>
-              <em>Only saved cart choices are ordered.</em>
+              <span>Order lands tomorrow morning</span>
+              <strong>Day ${state.day + 1} opening shelf</strong>
+              <em>Supplier does not deliver mid-day — only tonight’s saved cart counts.</em>
             </div>
             ${this.renderPlanSummary(state)}
             <div class="decision-bottom-actions">
               ${this.planError ? `<div class="case-submit-note negative">${this.planError}</div>` : `
                 <div class="case-submit-note ${canOpenNextDay ? '' : 'negative'}">
                   ${canOpenNextDay
-                    ? 'Review saved decisions, then open the next day.'
+                    ? 'Review cart and commitments, then submit tonight’s order.'
                     : 'Plan is above available cash. Reduce cart or marketing spend first.'}
                 </div>
               `}
               <button class="btn btn-success case-submit-btn" id="btn-submit-case-plan" ${canOpenNextDay ? '' : 'disabled'}>
-                OPEN NEXT DAY
+                Submit order for Day ${state.day + 1}
               </button>
             </div>
           </aside>
