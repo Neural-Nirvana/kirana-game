@@ -52,6 +52,7 @@ body.about-route {
 
 .about-section,
 .about-hero,
+.about-hero-leaderboard,
 .about-quote-band,
 .about-cta {
   scroll-margin-top: calc(var(--ab-nav-h) + 16px);
@@ -275,8 +276,24 @@ body.about-route {
   margin: 0 auto;
   display: grid;
   grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
-  gap: clamp(32px, 5vw, 72px);
+  grid-template-areas:
+    "copy visual"
+    "leaderboard leaderboard";
+  gap: clamp(24px, 4vw, 48px);
   align-items: center;
+}
+
+.about-hero-copy {
+  grid-area: copy;
+  align-self: start;
+}
+
+.about-hero-leaderboard {
+  grid-area: leaderboard;
+}
+
+.about-hero-visual {
+  grid-area: visual;
 }
 
 .about-eyebrow {
@@ -362,6 +379,149 @@ body.about-route {
   color: var(--ab-ink-muted);
   text-transform: uppercase;
   letter-spacing: 0.06em;
+}
+
+/* Homepage leaderboard */
+.about-hero-leaderboard-head {
+  margin-bottom: 14px;
+}
+
+.about-hero-leaderboard-head h2 {
+  font-size: clamp(28px, 4vw, 40px);
+}
+
+.about-leaderboard-panel {
+  border: 1px solid var(--ab-line);
+  border-radius: 18px;
+  background: var(--ab-paper);
+  box-shadow: var(--ab-shadow);
+  overflow: hidden;
+}
+
+.about-leaderboard-loading,
+.about-leaderboard-empty {
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+  text-align: center;
+  padding: 28px 20px;
+}
+
+.about-leaderboard-loading p,
+.about-leaderboard-empty p {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ab-ink);
+}
+
+.about-leaderboard-empty span {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ab-ink-muted);
+}
+
+.about-leaderboard-spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid rgba(28, 21, 16, 0.08);
+  border-top-color: var(--ab-leaf);
+  border-radius: 50%;
+  animation: ab-spin 0.8s linear infinite;
+}
+
+@keyframes ab-spin {
+  to { transform: rotate(360deg); }
+}
+
+.about-leaderboard-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.about-leaderboard-table th,
+.about-leaderboard-table td {
+  padding: 14px 16px;
+  text-align: left;
+  border-bottom: 1px solid var(--ab-line);
+  font-size: 14px;
+}
+
+.about-leaderboard-table th {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ab-ink-muted);
+  background: rgba(28, 21, 16, 0.03);
+}
+
+.about-leaderboard-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.about-leaderboard-table tbody tr:hover td {
+  background: rgba(45, 106, 79, 0.04);
+}
+
+.about-leaderboard-rank {
+  display: inline-flex;
+  min-width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: rgba(28, 21, 16, 0.06);
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--ab-ink-soft);
+}
+
+.about-leaderboard-table tbody tr:nth-child(1) .about-leaderboard-rank {
+  background: rgba(217, 119, 6, 0.16);
+  color: var(--ab-saffron-deep);
+}
+
+.about-leaderboard-table tbody tr:nth-child(2) .about-leaderboard-rank,
+.about-leaderboard-table tbody tr:nth-child(3) .about-leaderboard-rank {
+  background: rgba(61, 90, 128, 0.12);
+  color: var(--ab-indigo);
+}
+
+.about-leaderboard-table td.good {
+  color: var(--ab-leaf);
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-weight: 800;
+}
+
+.about-leaderboard-table td.bad {
+  color: var(--ab-terracotta);
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-weight: 800;
+}
+
+.about-home-cta {
+  display: grid;
+  gap: 10px;
+  justify-items: center;
+  text-align: center;
+  margin-top: 22px;
+  padding: 8px 0 4px;
+}
+
+.about-home-cta p {
+  margin: 0;
+  max-width: 52ch;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ab-ink-muted);
+  font-weight: 600;
+}
+
+.about-btn-lg {
+  padding: 14px 28px;
+  font-size: 15px;
 }
 
 /* Hero collage */
@@ -1313,9 +1473,20 @@ body.about-route {
     grid-row: span 1;
   }
 
+  .about-hero-grid {
+    grid-template-areas:
+      "copy"
+      "leaderboard"
+      "visual";
+  }
+
   .about-hero-visual {
     min-height: 340px;
-    order: -1;
+  }
+
+  .about-leaderboard-table th:nth-child(5),
+  .about-leaderboard-table td:nth-child(5) {
+    display: none;
   }
 }
 

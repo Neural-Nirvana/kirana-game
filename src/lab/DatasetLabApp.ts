@@ -347,7 +347,7 @@ export class DatasetLabApp {
             </p>
           </div>
           <nav class="lab-nav">
-            <a href="/">Play shop</a>
+            <a href="/play">Play shop</a>
             <a href="/arena-2">Arena</a>
             <a href="/about">About</a>
             <button type="button" data-lab-action="refresh" ${this.busy ? 'disabled' : ''}>Refresh</button>

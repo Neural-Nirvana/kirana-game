@@ -1233,7 +1233,7 @@ export class ArenaApp2 {
             <button class="a2-intro-btn" data-a2-action="intro-leaderboard" type="button">View Leaderboard</button>
             <button class="a2-intro-btn" data-a2-action="intro-quick-demo" type="button">Quick Heuristic Demo</button>
             <a class="a2-intro-link" href="/lab">Dataset Lab →</a>
-            <a class="a2-intro-link subtle" href="/">Play the human game →</a>
+            <a class="a2-intro-link subtle" href="/play">Play the human game →</a>
             <a class="a2-intro-link subtle" href="/about">What is ${PRODUCT_NAME}? →</a>
           </div>
         ` : ''}

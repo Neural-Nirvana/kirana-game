@@ -1,6 +1,14 @@
 import './about.css';
 import { PRODUCT_NAME, PRODUCT_TAGLINE, SHOP_NAME, SHOP_LOCATION } from '../constants/brand';
 import { DEFAULT_NEIGHBORHOOD_PROFILE } from '../constants/neighborhood';
+import {
+  DEFAULT_MODEL_PRESETS,
+  dedupeScoreboardRows,
+  modelLabel,
+  requestJson,
+  signed,
+} from '../arena/arena-shared';
+import type { ArenaScoreboardResponse } from '../arena/arena-types';
 
 import stageBackdropUrl from '../assets/arena/stage-backdrop.png';
 import robotUrl from '../assets/arena/robot-shopkeeper.png';
@@ -30,6 +38,9 @@ export class AboutPage {
   private readonly root: HTMLElement;
   private phaseTimer?: number;
   private scrollListener?: () => void;
+  private scoreboardRows: ArenaScoreboardResponse['rows'] = [];
+  private scoreboardLoading = true;
+  private scoreboardError = false;
 
   constructor(rootId: string) {
     const root = document.getElementById(rootId);
@@ -43,6 +54,25 @@ export class AboutPage {
     this.bindScrollReveal();
     this.bindNavigation();
     this.startPhaseRotation();
+    void this.loadScoreboard();
+  }
+
+  private async loadScoreboard() {
+    try {
+      const response = await requestJson<ArenaScoreboardResponse>('/api/arena/scoreboard?limit=12');
+      this.scoreboardRows = dedupeScoreboardRows(response.rows);
+      this.scoreboardError = false;
+    } catch {
+      this.scoreboardRows = [];
+      this.scoreboardError = true;
+    } finally {
+      this.scoreboardLoading = false;
+      const mount = this.root.querySelector('#about-leaderboard-mount');
+      if (mount) {
+        mount.innerHTML = this.renderLeaderboardBlock();
+        this.bindScrollReveal();
+      }
+    }
   }
 
   destroy() {
@@ -83,6 +113,7 @@ export class AboutPage {
               </a>
             </div>
             <div class="about-nav-sections">
+              <a href="#leaderboard" data-section="leaderboard">Leaderboard</a>
               <a href="#challenge" data-section="challenge">Challenge</a>
               <a href="#how-it-works" data-section="how-it-works">Loop</a>
               <a href="#system" data-section="system">Harness</a>
@@ -90,12 +121,9 @@ export class AboutPage {
               <a href="#proof" data-section="proof">Proof</a>
               <a href="#metrics" data-section="metrics">Metrics</a>
               <a href="#arena" data-section="arena">Arena</a>
-              <a href="#modes" data-section="modes">Play</a>
             </div>
             <div class="about-nav-cta">
-              <a class="about-btn about-btn-ghost" href="/lab">Dataset Lab</a>
-              <a class="about-btn about-btn-ghost" href="/">Play</a>
-              <a class="about-btn about-btn-primary" href="/arena-2">Watch Arena</a>
+              <a class="about-btn about-btn-primary" href="/arena-2">AI Replay Theatre</a>
             </div>
           </div>
         </nav>
@@ -115,16 +143,25 @@ export class AboutPage {
                 a fixed Indian kirana on ${SHOP_LOCATION}. One JSON plan per day.
                 The simulator decides what customers actually do.
               </p>
-              <div class="about-hero-actions">
-                <a class="about-btn about-btn-primary" href="/arena-2">Watch AI Replay Theatre</a>
-                <a class="about-btn about-btn-warm" href="/">Play the Shop Yourself</a>
-                <a class="about-btn about-btn-ghost" href="#how-it-works">See the loop →</a>
-              </div>
               <div class="about-hero-stats">
                 <div class="about-stat"><strong>30</strong><span>Day episodes</span></div>
                 <div class="about-stat"><strong>1</strong><span>JSON plan / day</span></div>
                 <div class="about-stat"><strong>${households}</strong><span>Homes in catchment</span></div>
                 <div class="about-stat"><strong>7</strong><span>Reward buckets</span></div>
+              </div>
+            </div>
+            <div class="about-hero-leaderboard about-reveal visible" id="leaderboard">
+              <div class="about-section-head about-hero-leaderboard-head">
+                <span>Live benchmark</span>
+                <h2>Model leaderboard</h2>
+                <p>Completed 30-day runs on the same ${SHOP_NAME} world — ranked by final backend score.</p>
+              </div>
+              <div id="about-leaderboard-mount">
+                ${this.renderLeaderboardBlock()}
+              </div>
+              <div class="about-home-cta">
+                <a class="about-btn about-btn-primary about-btn-lg" href="/arena-2">Watch AI Replay Theatre</a>
+                <p>Replay saved runs, watch customers walk in, and see how each model’s nightly JSON plan scored.</p>
               </div>
             </div>
             <div class="about-hero-visual about-reveal about-reveal-delay-1 visible">
@@ -361,33 +398,6 @@ export class AboutPage {
           </div>
         </section>
 
-        <section class="about-section" id="modes">
-          <div class="about-section-head about-reveal">
-            <span>Two ways to explore</span>
-            <h2>Play it yourself, or judge the AI</h2>
-          </div>
-          <div class="about-modes about-reveal">
-            <article class="about-mode">
-              <span class="about-mode-label">Human gameplay</span>
-              <h3>Run the counter</h3>
-              <p>
-                Operate ${SHOP_NAME} yourself. Read the neighborhood, stock shelves,
-                set offers, manage khata, and feel the pressure of a real kirana day loop.
-              </p>
-              <a class="about-btn about-btn-warm" href="/">Open the Shop</a>
-            </article>
-            <article class="about-mode arena-mode">
-              <span class="about-mode-label">${PRODUCT_NAME} theatre</span>
-              <h3>Judge the AI</h3>
-              <p>
-                Pick a model, start a live 30-day run, or replay a saved benchmark instantly.
-                Watch each day's JSON plan get tested by simulated customers and scored.
-              </p>
-              <a class="about-btn about-btn-primary" href="/arena-2">Open Arena v2</a>
-            </article>
-          </div>
-        </section>
-
         <section class="about-cta about-reveal" id="cta">
           <h2>The goal is bigger than a game</h2>
           <p>
@@ -396,9 +406,7 @@ export class AboutPage {
             protect cash, and learn from yesterday's sales — not replace them.
           </p>
           <div class="about-cta-actions">
-            <a class="about-btn about-btn-warm" href="/arena-2">Watch ${PRODUCT_NAME}</a>
-            <a class="about-btn" href="/">Play the Game</a>
-            <a class="about-btn" href="/arena">Arena v1</a>
+            <a class="about-btn about-btn-primary about-btn-lg" href="/arena-2">Watch AI Replay Theatre</a>
           </div>
         </section>
 
@@ -414,7 +422,7 @@ export class AboutPage {
     const progress = this.root.querySelector<HTMLElement>('#about-progress');
     const backTop = this.root.querySelector<HTMLButtonElement>('#about-back-top');
     const sectionLinks = this.root.querySelectorAll<HTMLAnchorElement>('.about-nav-sections a[data-section]');
-    const sections = ['challenge', 'how-it-works', 'world', 'proof', 'arena', 'modes', 'cta']
+    const sections = ['leaderboard', 'challenge', 'how-it-works', 'world', 'proof', 'arena', 'cta']
       .map((id) => document.getElementById(id))
       .filter((el): el is HTMLElement => Boolean(el));
 
@@ -470,6 +478,53 @@ export class AboutPage {
       { threshold: 0.12, rootMargin: '0px 0px -40px 0px' }
     );
     reveals.forEach((el) => observer.observe(el));
+  }
+
+  private renderLeaderboardBlock(): string {
+    if (this.scoreboardLoading) {
+      return `
+        <div class="about-leaderboard-panel about-leaderboard-loading">
+          <span class="about-leaderboard-spinner" aria-hidden="true"></span>
+          <p>Loading benchmark runs from SQLite…</p>
+        </div>
+      `;
+    }
+
+    if (this.scoreboardError || this.scoreboardRows.length === 0) {
+      return `
+        <div class="about-leaderboard-panel about-leaderboard-empty">
+          <p>${this.scoreboardError ? 'Leaderboard could not load right now.' : 'No completed benchmark runs yet.'}</p>
+          <span>Start a run in AI Replay Theatre to populate the board.</span>
+        </div>
+      `;
+    }
+
+    return `
+      <div class="about-leaderboard-panel">
+        <table class="about-leaderboard-table">
+          <thead>
+            <tr>
+              <th scope="col">Rank</th>
+              <th scope="col">Model</th>
+              <th scope="col">Score</th>
+              <th scope="col">Trust</th>
+              <th scope="col">Days</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${this.scoreboardRows.map((row, index) => `
+              <tr>
+                <td><span class="about-leaderboard-rank">${index + 1}</span></td>
+                <td><strong>${escapeHtml(modelLabel(row.model, DEFAULT_MODEL_PRESETS))}</strong></td>
+                <td class="${row.score >= 0 ? 'good' : 'bad'}">${signed(row.score)}</td>
+                <td>${row.finalTrust}%</td>
+                <td>${row.daysCompleted}/30</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
   }
 
   private startPhaseRotation() {

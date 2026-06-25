@@ -11,11 +11,9 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     return;
   }
-  if (path.startsWith('/about')) {
-    void import('./about/AboutPage').then(({ AboutPage }) => {
-      const about = new AboutPage('app');
-      about.start();
-    });
+  if (path.startsWith('/play')) {
+    const game = new GameController();
+    game.start();
     return;
   }
   if (path.startsWith('/arena-2')) {
@@ -33,6 +31,8 @@ document.addEventListener('DOMContentLoaded', () => {
     return;
   }
 
-  const game = new GameController();
-  game.start();
+  void import('./about/AboutPage').then(({ AboutPage }) => {
+    const about = new AboutPage('app');
+    about.start();
+  });
 });
