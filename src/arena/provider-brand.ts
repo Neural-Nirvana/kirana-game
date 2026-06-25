@@ -1,5 +1,6 @@
 import type { ArenaModelPreset } from './arena-types';
-import { isHeuristicModel, modelLabel } from './arena-shared';
+import { modelLabel } from './arena-shared';
+import { isHeuristicModel } from './replay-ranking';
 
 export type ModelProvider =
   | 'openai'

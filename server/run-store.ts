@@ -10,7 +10,7 @@ import type {
   SerializedGameState,
   StepRunResponse,
 } from '../src/types';
-import { dedupeReplaySummariesByModel } from '../src/arena/arena-shared';
+import { dedupeReplaySummariesByModel } from '../src/arena/replay-ranking';
 import { PRODUCTS } from '../src/constants/products';
 import { GameState } from '../src/game/GameState';
 import { DaySimulator } from '../src/game/DaySimulator';
