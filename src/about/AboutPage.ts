@@ -509,35 +509,65 @@ export class AboutPage {
 
     return `
       <div class="about-leaderboard-panel">
-        <div class="about-leaderboard-scroll">
-          <table class="about-leaderboard-table">
-            <thead>
-              <tr>
-                <th scope="col">Model</th>
-                <th scope="col">Reward</th>
-                <th scope="col">Final Cash</th>
-                <th scope="col">Final Trust</th>
-                <th scope="col">Profit</th>
-                <th scope="col">Sold Units</th>
-                <th scope="col">Missed Units</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${this.scoreboardRows.map((row, index) => `
+        <div class="about-leaderboard-mobile" aria-label="Model leaderboard">
+          ${this.scoreboardRows.map((row, index) => this.renderLeaderboardCard(row, index)).join('')}
+        </div>
+        <div class="about-leaderboard-desktop">
+          <p class="about-leaderboard-scroll-hint">Swipe for all columns →</p>
+          <div class="about-leaderboard-scroll">
+            <table class="about-leaderboard-table">
+              <thead>
                 <tr>
-                  <td class="about-model-cell">${renderBenchmarkModelCell(row.model, DEFAULT_MODEL_PRESETS, { rank: index + 1 })}</td>
-                  <td class="${row.score >= 0 ? 'good' : 'bad'}">${signed(row.score)}</td>
-                  <td>${money(row.finalCash)}</td>
-                  <td>${row.finalTrust}%</td>
-                  <td class="${row.profit >= 0 ? 'good' : 'bad'}">${money(row.profit)}</td>
-                  <td>${row.soldUnits.toLocaleString('en-IN')}</td>
-                  <td class="${row.missedUnits > 0 ? 'bad' : 'good'}">${row.missedUnits.toLocaleString('en-IN')}</td>
+                  <th scope="col">Model</th>
+                  <th scope="col">Reward</th>
+                  <th scope="col">Final Cash</th>
+                  <th scope="col">Final Trust</th>
+                  <th scope="col">Profit</th>
+                  <th scope="col">Sold Units</th>
+                  <th scope="col">Missed Units</th>
                 </tr>
-              `).join('')}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                ${this.scoreboardRows.map((row, index) => `
+                  <tr>
+                    <td class="about-model-cell">${renderBenchmarkModelCell(row.model, DEFAULT_MODEL_PRESETS, { rank: index + 1 })}</td>
+                    <td class="${row.score >= 0 ? 'good' : 'bad'}">${signed(row.score)}</td>
+                    <td>${money(row.finalCash)}</td>
+                    <td>${row.finalTrust}%</td>
+                    <td class="${row.profit >= 0 ? 'good' : 'bad'}">${money(row.profit)}</td>
+                    <td>${row.soldUnits.toLocaleString('en-IN')}</td>
+                    <td class="${row.missedUnits > 0 ? 'bad' : 'good'}">${row.missedUnits.toLocaleString('en-IN')}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
+    `;
+  }
+
+  private renderLeaderboardCard(
+    row: ArenaScoreboardResponse['rows'][number],
+    index: number
+  ): string {
+    return `
+      <article class="about-leaderboard-card">
+        <div class="about-leaderboard-card-head">
+          ${renderBenchmarkModelCell(row.model, DEFAULT_MODEL_PRESETS, { rank: index + 1 })}
+          <div class="about-leaderboard-card-reward ${row.score >= 0 ? 'good' : 'bad'}">
+            <span>Reward</span>
+            <strong>${signed(row.score)}</strong>
+          </div>
+        </div>
+        <dl class="about-leaderboard-card-metrics">
+          <div><dt>Cash</dt><dd>${money(row.finalCash)}</dd></div>
+          <div><dt>Trust</dt><dd>${row.finalTrust}%</dd></div>
+          <div><dt>Profit</dt><dd class="${row.profit >= 0 ? 'good' : 'bad'}">${money(row.profit)}</dd></div>
+          <div><dt>Sold</dt><dd>${row.soldUnits.toLocaleString('en-IN')}</dd></div>
+          <div><dt>Missed</dt><dd class="${row.missedUnits > 0 ? 'bad' : 'good'}">${row.missedUnits.toLocaleString('en-IN')}</dd></div>
+        </dl>
+      </article>
     `;
   }
 

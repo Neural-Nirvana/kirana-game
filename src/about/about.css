@@ -395,9 +395,109 @@ body.about-route {
   overflow: hidden;
 }
 
+.about-leaderboard-mobile {
+  display: none;
+}
+
+.about-leaderboard-desktop {
+  display: block;
+}
+
+.about-leaderboard-scroll-hint {
+  display: none;
+  margin: 0;
+  padding: 10px 14px 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ab-ink-muted);
+}
+
 .about-leaderboard-scroll {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+}
+
+.about-leaderboard-card {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--ab-line);
+}
+
+.about-leaderboard-card:last-child {
+  border-bottom: none;
+}
+
+.about-leaderboard-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.about-leaderboard-card-head .benchmark-model-cell {
+  min-width: 0;
+  flex: 1;
+}
+
+.about-leaderboard-card-reward {
+  flex-shrink: 0;
+  text-align: right;
+}
+
+.about-leaderboard-card-reward span {
+  display: block;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ab-ink-muted);
+}
+
+.about-leaderboard-card-reward strong {
+  display: block;
+  margin-top: 4px;
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.about-leaderboard-card-reward.good strong,
+.about-leaderboard-card-metrics dd.good {
+  color: var(--ab-leaf);
+}
+
+.about-leaderboard-card-reward.bad strong,
+.about-leaderboard-card-metrics dd.bad {
+  color: var(--ab-terracotta);
+}
+
+.about-leaderboard-card-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px 12px;
+  margin: 12px 0 0;
+}
+
+.about-leaderboard-card-metrics div {
+  min-width: 0;
+}
+
+.about-leaderboard-card-metrics dt {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ab-ink-muted);
+}
+
+.about-leaderboard-card-metrics dd {
+  margin: 4px 0 0;
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ab-ink);
 }
 
 .about-leaderboard-loading,
@@ -1491,16 +1591,180 @@ body.about-route {
 
 @media (max-width: 900px) {
   .about-nav-inner {
-    grid-template-columns: 1fr;
-    gap: 10px;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: auto auto;
+    gap: 8px 12px;
+    padding-inline: 16px;
   }
 
-  .about-nav-sections {
-    justify-content: flex-start;
+  .about-brand {
+    grid-column: 1;
+    grid-row: 1;
+    min-width: 0;
   }
 
   .about-nav-cta {
+    grid-column: 2;
+    grid-row: 1;
+    justify-content: flex-end;
+    align-self: center;
+  }
+
+  .about-nav-sections {
+    grid-column: 1 / -1;
+    grid-row: 2;
     justify-content: flex-start;
+    margin: 0 -4px;
+    padding-bottom: 2px;
+  }
+
+  .about-nav-sections a {
+    padding: 7px 12px;
+    font-size: 11px;
+  }
+
+  .about-nav-cta .about-btn {
+    padding: 9px 14px;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+
+  .about-brand-tagline {
+    display: none;
+  }
+}
+
+@media (max-width: 768px) {
+  html.about-route,
+  body.about-route {
+    scroll-padding-top: 108px;
+  }
+
+  .about-root {
+    --ab-nav-h: 96px;
+  }
+
+  .about-hero {
+    padding-top: 32px;
+    padding-bottom: 48px;
+  }
+
+  .about-hero-logo {
+    display: none;
+  }
+
+  .about-eyebrow {
+    font-size: 11px;
+  }
+
+  .about-hero-lead {
+    font-size: 16px;
+    line-height: 1.6;
+    max-width: none;
+  }
+
+  .about-hero-actions {
+    flex-direction: column;
+    align-items: stretch;
+    margin-top: 24px;
+  }
+
+  .about-hero-actions .about-btn {
+    justify-content: center;
+    width: 100%;
+  }
+
+  .about-hero-stats {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px 20px;
+    margin-top: 28px;
+    padding-top: 20px;
+  }
+
+  .about-hero-leaderboard-head h2 {
+    font-size: clamp(24px, 7vw, 32px);
+  }
+
+  .about-hero-leaderboard-head p {
+    font-size: 15px;
+  }
+
+  .about-leaderboard-mobile {
+    display: block;
+  }
+
+  .about-leaderboard-desktop {
+    display: none;
+  }
+
+  .about-home-cta .about-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .about-hero-visual {
+    min-height: 280px;
+    margin-top: 8px;
+  }
+
+  .about-collage-bg {
+    inset: 10% 4% 10% 4%;
+    border-radius: 24px;
+  }
+
+  .about-orbit-item {
+    width: 52px;
+    height: 52px;
+    padding: 8px;
+    border-radius: 14px;
+  }
+
+  .about-orbit-item:nth-child(2) { width: 48px; height: 48px; }
+  .about-orbit-item:nth-child(3) { width: 44px; height: 44px; }
+
+  .about-section {
+    padding-block: 48px;
+  }
+
+  .about-section-head {
+    margin-bottom: 32px;
+  }
+
+  .about-section-head p {
+    font-size: 15px;
+  }
+
+  .about-bento-card,
+  .about-bento-card.featured {
+    padding: 20px;
+  }
+
+  .about-quote-band p {
+    font-size: clamp(20px, 5.5vw, 28px);
+  }
+
+  .about-cta-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .about-cta-actions .about-btn {
+    justify-content: center;
+    width: 100%;
+  }
+
+  .about-back-top {
+    right: 16px;
+    bottom: 20px;
+    width: 42px;
+    height: 42px;
+  }
+}
+
+@media (min-width: 769px) and (max-width: 1100px) {
+  .about-leaderboard-scroll-hint {
+    display: block;
   }
 }
 
@@ -1509,6 +1773,36 @@ body.about-route {
   .about-metric-board { grid-template-columns: 1fr; }
   .about-metric-card { min-height: 0; }
   .about-system-card { min-height: 0; }
-  .about-hero-stats { gap: 20px; }
-  html.about-route { scroll-padding-top: 160px; }
+
+  .about-leaderboard-card-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .about-hero-visual {
+    min-height: 240px;
+  }
+
+  .about-footer {
+    font-size: 12px;
+    line-height: 1.5;
+    text-align: center;
+  }
+}
+
+@media (max-width: 420px) {
+  .about-nav-inner {
+    padding-inline: 12px;
+  }
+
+  .about-nav-cta .about-btn {
+    padding-inline: 12px;
+  }
+
+  .about-stat strong {
+    font-size: 24px;
+  }
+
+  .about-stat span {
+    font-size: 11px;
+  }
 }
