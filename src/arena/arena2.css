@@ -592,8 +592,16 @@
 }
 
 /* Scoreboard */
+.a2-scoreboard-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin: 0 -4px;
+  padding: 0 4px;
+}
+
 .a2-scoreboard {
   width: 100%;
+  min-width: 760px;
   border-collapse: collapse;
   font-size: 11px;
 }
@@ -624,9 +632,27 @@
   cursor: pointer;
   text-align: left;
   padding: 0;
-  display: flex;
-  align-items: center;
-  gap: 6px;
+  display: block;
+  width: 100%;
+}
+
+.a2-scoreboard .benchmark-model-cell {
+  gap: 8px;
+}
+
+.a2-scoreboard .benchmark-model-copy strong {
+  color: #e2e8f0;
+  font-size: 11px;
+}
+
+.a2-scoreboard .benchmark-model-copy span {
+  color: #94a3b8;
+  font-size: 10px;
+}
+
+.a2-scoreboard .benchmark-rank {
+  background: rgba(245, 196, 81, 0.18);
+  color: var(--a2-gold);
 }
 
 .a2-rank {

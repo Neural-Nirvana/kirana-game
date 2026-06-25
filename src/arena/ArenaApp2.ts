@@ -1,9 +1,11 @@
 import './arena2.css';
 import './arena2-editorial.css';
+import './provider-brand.css';
 import { PRODUCT_NAME, PRODUCT_TAGLINE, SHOP_NAME, SHOP_LOCATION } from '../constants/brand';
 import sidebarHeroUrl from '../assets/arena2/sidebar-hero.jpg';
 import emptyStateUrl from '../assets/arena2/empty-state.jpg';
 import { adaptAiReplay } from './arena-adapter';
+import { renderBenchmarkModelCell } from './provider-brand';
 import { ArenaStage } from './ArenaStage';
 import {
   actionIcon,
@@ -939,23 +941,38 @@ export class ArenaApp2 {
             <h2>Model Leaderboard</h2>
             <p class="a2-hint">Completed 30-day benchmark runs from SQLite.</p>
             ${this.scoreboardRows.length === 0 ? '<p class="a2-empty">No scoreboard data yet.</p>' : `
-              <table class="a2-scoreboard">
-                <thead><tr><th>Model</th><th>Score</th><th>Trust</th></tr></thead>
-                <tbody>
-                  ${this.scoreboardRows.map((row, i) => `
-                    <tr class="${this.run?.runId === row.runId ? 'active' : ''}">
-                      <td>
-                        <button data-a2-action="replay-run" data-run-id="${escapeHtml(row.runId)}" type="button">
-                          <span class="a2-rank">${i + 1}</span>
-                          ${escapeHtml(modelLabel(row.model, this.modelPresets))}
-                        </button>
-                      </td>
-                      <td class="${row.score >= 0 ? 'good' : 'bad'}">${signed(row.score)}</td>
-                      <td>${row.finalTrust}%</td>
+              <div class="a2-scoreboard-wrap">
+                <table class="a2-scoreboard">
+                  <thead>
+                    <tr>
+                      <th>Model</th>
+                      <th>Reward</th>
+                      <th>Final Cash</th>
+                      <th>Final Trust</th>
+                      <th>Profit</th>
+                      <th>Sold Units</th>
+                      <th>Missed Units</th>
                     </tr>
-                  `).join('')}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    ${this.scoreboardRows.map((row, i) => `
+                      <tr class="${this.run?.runId === row.runId ? 'active' : ''}">
+                        <td>
+                          <button data-a2-action="replay-run" data-run-id="${escapeHtml(row.runId)}" type="button">
+                            ${renderBenchmarkModelCell(row.model, this.modelPresets, { rank: i + 1 })}
+                          </button>
+                        </td>
+                        <td class="${row.score >= 0 ? 'good' : 'bad'}">${signed(row.score)}</td>
+                        <td>${money(row.finalCash)}</td>
+                        <td>${row.finalTrust}%</td>
+                        <td class="${row.profit >= 0 ? 'good' : 'bad'}">${money(row.profit)}</td>
+                        <td>${row.soldUnits.toLocaleString('en-IN')}</td>
+                        <td class="${row.missedUnits > 0 ? 'bad' : 'good'}">${row.missedUnits.toLocaleString('en-IN')}</td>
+                      </tr>
+                    `).join('')}
+                  </tbody>
+                </table>
+              </div>
             `}
           </div>
         ` : ''}

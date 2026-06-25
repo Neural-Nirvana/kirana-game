@@ -1,13 +1,15 @@
 import './about.css';
+import '../arena/provider-brand.css';
 import { PRODUCT_NAME, PRODUCT_TAGLINE, SHOP_NAME, SHOP_LOCATION } from '../constants/brand';
 import { DEFAULT_NEIGHBORHOOD_PROFILE } from '../constants/neighborhood';
 import {
   DEFAULT_MODEL_PRESETS,
   dedupeScoreboardRows,
-  modelLabel,
+  money,
   requestJson,
   signed,
 } from '../arena/arena-shared';
+import { renderBenchmarkModelCell } from '../arena/provider-brand';
 import type { ArenaScoreboardResponse } from '../arena/arena-types';
 
 import stageBackdropUrl from '../assets/arena/stage-backdrop.png';
@@ -501,28 +503,34 @@ export class AboutPage {
 
     return `
       <div class="about-leaderboard-panel">
-        <table class="about-leaderboard-table">
-          <thead>
-            <tr>
-              <th scope="col">Rank</th>
-              <th scope="col">Model</th>
-              <th scope="col">Score</th>
-              <th scope="col">Trust</th>
-              <th scope="col">Days</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${this.scoreboardRows.map((row, index) => `
+        <div class="about-leaderboard-scroll">
+          <table class="about-leaderboard-table">
+            <thead>
               <tr>
-                <td><span class="about-leaderboard-rank">${index + 1}</span></td>
-                <td><strong>${escapeHtml(modelLabel(row.model, DEFAULT_MODEL_PRESETS))}</strong></td>
-                <td class="${row.score >= 0 ? 'good' : 'bad'}">${signed(row.score)}</td>
-                <td>${row.finalTrust}%</td>
-                <td>${row.daysCompleted}/30</td>
+                <th scope="col">Model</th>
+                <th scope="col">Reward</th>
+                <th scope="col">Final Cash</th>
+                <th scope="col">Final Trust</th>
+                <th scope="col">Profit</th>
+                <th scope="col">Sold Units</th>
+                <th scope="col">Missed Units</th>
               </tr>
-            `).join('')}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              ${this.scoreboardRows.map((row, index) => `
+                <tr>
+                  <td class="about-model-cell">${renderBenchmarkModelCell(row.model, DEFAULT_MODEL_PRESETS, { rank: index + 1 })}</td>
+                  <td class="${row.score >= 0 ? 'good' : 'bad'}">${signed(row.score)}</td>
+                  <td>${money(row.finalCash)}</td>
+                  <td>${row.finalTrust}%</td>
+                  <td class="${row.profit >= 0 ? 'good' : 'bad'}">${money(row.profit)}</td>
+                  <td>${row.soldUnits.toLocaleString('en-IN')}</td>
+                  <td class="${row.missedUnits > 0 ? 'bad' : 'good'}">${row.missedUnits.toLocaleString('en-IN')}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
       </div>
     `;
   }

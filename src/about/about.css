@@ -398,6 +398,11 @@ body.about-route {
   overflow: hidden;
 }
 
+.about-leaderboard-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
 .about-leaderboard-loading,
 .about-leaderboard-empty {
   display: grid;
@@ -436,15 +441,41 @@ body.about-route {
 
 .about-leaderboard-table {
   width: 100%;
+  min-width: 980px;
   border-collapse: collapse;
 }
 
 .about-leaderboard-table th,
 .about-leaderboard-table td {
-  padding: 14px 16px;
+  padding: 12px 14px;
   text-align: left;
   border-bottom: 1px solid var(--ab-line);
-  font-size: 14px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.about-leaderboard-table td.about-model-cell {
+  white-space: normal;
+  min-width: 220px;
+}
+
+.about-leaderboard-table .benchmark-model-copy strong {
+  color: var(--ab-ink);
+}
+
+.about-leaderboard-table .benchmark-model-copy span {
+  color: var(--ab-ink-muted);
+}
+
+.about-leaderboard-table tbody tr:nth-child(1) .benchmark-rank {
+  background: rgba(217, 119, 6, 0.16);
+  color: var(--ab-saffron-deep);
+}
+
+.about-leaderboard-table tbody tr:nth-child(2) .benchmark-rank,
+.about-leaderboard-table tbody tr:nth-child(3) .benchmark-rank {
+  background: rgba(61, 90, 128, 0.12);
+  color: var(--ab-indigo);
 }
 
 .about-leaderboard-table th {
@@ -462,31 +493,6 @@ body.about-route {
 
 .about-leaderboard-table tbody tr:hover td {
   background: rgba(45, 106, 79, 0.04);
-}
-
-.about-leaderboard-rank {
-  display: inline-flex;
-  min-width: 28px;
-  height: 28px;
-  align-items: center;
-  justify-content: center;
-  border-radius: 999px;
-  background: rgba(28, 21, 16, 0.06);
-  font-family: var(--font-mono, 'JetBrains Mono', monospace);
-  font-size: 12px;
-  font-weight: 800;
-  color: var(--ab-ink-soft);
-}
-
-.about-leaderboard-table tbody tr:nth-child(1) .about-leaderboard-rank {
-  background: rgba(217, 119, 6, 0.16);
-  color: var(--ab-saffron-deep);
-}
-
-.about-leaderboard-table tbody tr:nth-child(2) .about-leaderboard-rank,
-.about-leaderboard-table tbody tr:nth-child(3) .about-leaderboard-rank {
-  background: rgba(61, 90, 128, 0.12);
-  color: var(--ab-indigo);
 }
 
 .about-leaderboard-table td.good {
@@ -1484,10 +1490,6 @@ body.about-route {
     min-height: 340px;
   }
 
-  .about-leaderboard-table th:nth-child(5),
-  .about-leaderboard-table td:nth-child(5) {
-    display: none;
-  }
 }
 
 @media (max-width: 900px) {
