@@ -10,6 +10,7 @@ import type {
   SerializedGameState,
   StepRunResponse,
 } from '../src/types';
+import { dedupeReplaySummariesByModel } from '../src/arena/arena-shared';
 import { PRODUCTS } from '../src/constants/products';
 import { GameState } from '../src/game/GameState';
 import { DaySimulator } from '../src/game/DaySimulator';
@@ -720,7 +721,10 @@ export class RunStore {
   }
 
   getArenaScoreboard(limit = 25) {
-    const replays = this.listAiReplaySummaries({ status: 'complete', limit });
+    const replays = dedupeReplaySummariesByModel(
+      this.listAiReplaySummaries({ status: 'complete', limit: 300 })
+        .filter((replay) => replay.daysCompleted >= 30)
+    ).slice(0, limit);
     return replays.map((replay) => {
       const timeline = this.getTimeline(replay.runId);
       const decisions = this.getAiDecisions(replay.runId);

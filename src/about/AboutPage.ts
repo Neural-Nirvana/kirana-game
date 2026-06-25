@@ -2,9 +2,9 @@ import './about.css';
 import '../arena/provider-brand.css';
 import { PRODUCT_NAME, PRODUCT_TAGLINE, SHOP_NAME, SHOP_LOCATION } from '../constants/brand';
 import { DEFAULT_NEIGHBORHOOD_PROFILE } from '../constants/neighborhood';
+import { getBenchmarkDiagnosis } from '../arena/benchmark-catalog';
 import {
   DEFAULT_MODEL_PRESETS,
-  dedupeScoreboardRows,
   money,
   requestJson,
   signed,
@@ -61,8 +61,8 @@ export class AboutPage {
 
   private async loadScoreboard() {
     try {
-      const response = await requestJson<ArenaScoreboardResponse>('/api/arena/scoreboard?limit=12');
-      this.scoreboardRows = dedupeScoreboardRows(response.rows);
+      const response = await requestJson<ArenaScoreboardResponse>('/api/arena/scoreboard?limit=20');
+      this.scoreboardRows = response.rows;
       this.scoreboardError = false;
     } catch {
       this.scoreboardRows = [];
@@ -514,6 +514,7 @@ export class AboutPage {
                 <th scope="col">Profit</th>
                 <th scope="col">Sold Units</th>
                 <th scope="col">Missed Units</th>
+                <th scope="col">Diagnosis</th>
               </tr>
             </thead>
             <tbody>
@@ -526,6 +527,7 @@ export class AboutPage {
                   <td class="${row.profit >= 0 ? 'good' : 'bad'}">${money(row.profit)}</td>
                   <td>${row.soldUnits.toLocaleString('en-IN')}</td>
                   <td class="${row.missedUnits > 0 ? 'bad' : 'good'}">${row.missedUnits.toLocaleString('en-IN')}</td>
+                  <td class="about-diagnosis-cell">${escapeHtml(getBenchmarkDiagnosis(row.model) ?? 'Completed 30-day benchmark run from SQLite replay.')}</td>
                 </tr>
               `).join('')}
             </tbody>

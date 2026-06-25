@@ -24,12 +24,17 @@ export const COMPLETE_REPLAY_DAYS = 30;
 
 export const DEFAULT_MODEL_PRESETS: ArenaModelPreset[] = [
   { id: 'heuristic-v2', label: 'Built-in Heuristic', note: 'Instant local baseline. No OpenRouter cost.' },
-  { id: 'google/gemini-3.1-flash-lite', label: 'Gemini Flash Lite', note: 'Fast US-provider candidate for live viewing.' },
+  { id: 'google/gemini-3.1-flash-lite', label: 'Gemini 3.1 Flash Lite', note: 'Fast US-provider candidate for live viewing.' },
+  { id: 'google/gemini-3.5-flash', label: 'Gemini 3.5 Flash', note: 'Responses JSON-object Gemini candidate.' },
+  { id: 'google/gemma-4-31b-it', label: 'Gemma 4 31B', note: 'Compact Google open model baseline.' },
   { id: 'openai/gpt-5.5', label: 'GPT 5.5', note: 'Strong OpenAI reasoning baseline. Uses Responses API.' },
   { id: 'openai/gpt-5.4-mini', label: 'GPT 5.4 Mini', note: 'OpenAI text model for low-latency kirana decisions.' },
   { id: 'google/gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro', note: 'High-reasoning Gemini candidate. Uses Responses in max runs.' },
   { id: 'x-ai/grok-4.3', label: 'Grok 4.3', note: 'xAI high-reasoning candidate. Uses Responses JSON-object in max runs.' },
   { id: 'anthropic/claude-opus-4.8', label: 'Claude Opus 4.8', note: 'Premium Anthropic reasoning model. Smoke-test before full runs.' },
+  { id: 'nvidia/nemotron-3-ultra-550b-a55b', label: 'Nemotron 3 Ultra 550B', note: 'NVIDIA text-JSON benchmark candidate.' },
+  { id: 'sarvam-105b', label: 'Sarvam 105B', note: 'Indian model API benchmark via Sarvam.' },
+  { id: 'qwen/qwen3.7-max', label: 'Qwen 3.7 Max', note: 'Alibaba high-intelligence JSON-object candidate.' },
   { id: 'z-ai/glm-5.2', label: 'GLM 5.2', note: 'Thinking-capable model. Can be slower.' },
   { id: 'deepseek/deepseek-v4-flash', label: 'DeepSeek V4 Flash', note: 'Fast DeepSeek profile with compact observation.' },
   { id: 'deepseek/deepseek-v4-pro', label: 'DeepSeek V4 Pro', note: 'Stronger DeepSeek candidate; max runs use high reasoning.' },

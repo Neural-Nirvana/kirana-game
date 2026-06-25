@@ -4,20 +4,28 @@ import { isHeuristicModel, modelLabel } from './arena-shared';
 export type ModelProvider =
   | 'openai'
   | 'google'
+  | 'gemma'
   | 'anthropic'
   | 'xai'
   | 'deepseek'
   | 'zhipu'
+  | 'nvidia'
+  | 'sarvam'
+  | 'qwen'
   | 'heuristic'
   | 'unknown';
 
 const PROVIDER_LABELS: Record<ModelProvider, string> = {
   openai: 'OpenAI',
   google: 'Google',
+  gemma: 'Google Gemma',
   anthropic: 'Anthropic',
   xai: 'xAI',
   deepseek: 'DeepSeek',
   zhipu: 'Zhipu AI',
+  nvidia: 'NVIDIA',
+  sarvam: 'Sarvam AI',
+  qwen: 'Qwen',
   heuristic: 'Built-in',
   unknown: 'Model',
 };
@@ -63,6 +71,33 @@ const PROVIDER_SVGS: Record<ModelProvider, string> = {
       <path fill="#7c3aed" d="M7 6.5h4.2c2.5 0 4.1 1.4 4.1 3.6 0 1.5-.8 2.7-2.1 3.2l2.8 4.7h-2.8l-2.4-4.1H9.4v4.1H7V6.5zm2.4 2.1v2.7h1.7c1 0 1.6-.5 1.6-1.3s-.6-1.4-1.6-1.4H9.4z"/>
     </svg>
   `,
+  gemma: `
+    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Google Gemma">
+      <rect width="24" height="24" rx="6" fill="#fff7ed"/>
+      <path fill="#ea580c" d="M8 7.5h8v2H8v-2zm0 4h5.5v2H8v-2zm0 4h7v2H8v-2z"/>
+      <circle cx="17" cy="8.5" r="2" fill="#4285F4"/>
+      <circle cx="17" cy="12.5" r="2" fill="#34A853"/>
+      <circle cx="17" cy="16.5" r="2" fill="#FBBC05"/>
+    </svg>
+  `,
+  nvidia: `
+    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="NVIDIA">
+      <rect width="24" height="24" rx="6" fill="#0f172a"/>
+      <path fill="#76b900" d="M7 8h10v2.2H7V8zm0 4.2h10v2.2H7v-2.2zm0 4.2h6.5v2.2H7v-2.2z"/>
+    </svg>
+  `,
+  sarvam: `
+    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Sarvam AI">
+      <rect width="24" height="24" rx="6" fill="#fff4e8"/>
+      <path fill="#c2410c" d="M12 6.5c2.8 0 5 2.2 5 5s-2.2 5-5 5-5-2.2-5-5 2.2-5 5-5zm0 2.2c-1.5 0-2.8 1.3-2.8 2.8S10.5 14.3 12 14.3s2.8-1.3 2.8-2.8S13.5 8.7 12 8.7z"/>
+    </svg>
+  `,
+  qwen: `
+    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Qwen">
+      <rect width="24" height="24" rx="6" fill="#eef2ff"/>
+      <path fill="#4f46e5" d="M7.5 7.5h9v2h-9v-2zm0 4h6.5v2H7.5v-2zm0 4h8.5v2H7.5v-2z"/>
+    </svg>
+  `,
   heuristic: `
     <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Built-in heuristic">
       <rect width="24" height="24" rx="6" fill="#e8f5ef"/>
@@ -82,11 +117,15 @@ export function providerFromModel(model: string): ModelProvider {
   if (isHeuristicModel(model)) return 'heuristic';
   const id = model.toLowerCase();
   if (id.startsWith('openai/') || id.includes('gpt')) return 'openai';
+  if (id.includes('gemma')) return 'gemma';
   if (id.startsWith('google/') || id.includes('gemini')) return 'google';
   if (id.startsWith('anthropic/') || id.includes('claude')) return 'anthropic';
   if (id.startsWith('x-ai/') || id.startsWith('xai/') || id.includes('grok')) return 'xai';
   if (id.startsWith('deepseek/')) return 'deepseek';
   if (id.startsWith('z-ai/') || id.includes('glm')) return 'zhipu';
+  if (id.startsWith('nvidia/') || id.includes('nemotron')) return 'nvidia';
+  if (id.startsWith('sarvam')) return 'sarvam';
+  if (id.startsWith('qwen/')) return 'qwen';
   return 'unknown';
 }
 

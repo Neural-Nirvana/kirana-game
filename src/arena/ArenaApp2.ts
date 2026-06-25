@@ -22,7 +22,6 @@ import {
   latestDecisionLatency,
   loadRecentReplays,
   dedupeReplaySummariesByModel,
-  dedupeScoreboardRows,
   mergeModelPresets,
   modelLabel,
   modelMatchesReplay,
@@ -190,8 +189,8 @@ export class ArenaApp2 {
 
   private async loadScoreboard() {
     try {
-      const response = await requestJson<ArenaScoreboardResponse>('/api/arena/scoreboard?limit=8');
-      this.scoreboardRows = dedupeScoreboardRows(response.rows).slice(0, 8);
+      const response = await requestJson<ArenaScoreboardResponse>('/api/arena/scoreboard?limit=12');
+      this.scoreboardRows = response.rows;
       this.renderSidebar();
     } catch {
       this.scoreboardRows = [];
