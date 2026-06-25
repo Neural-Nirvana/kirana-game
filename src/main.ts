@@ -4,6 +4,13 @@ import { GameController } from './game/GameController';
 // Initialize the game when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
   const path = window.location.pathname;
+  if (path.startsWith('/lab')) {
+    void import('./lab/DatasetLabApp').then(({ DatasetLabApp }) => {
+      const lab = new DatasetLabApp('app');
+      void lab.start();
+    });
+    return;
+  }
   if (path.startsWith('/about')) {
     void import('./about/AboutPage').then(({ AboutPage }) => {
       const about = new AboutPage('app');

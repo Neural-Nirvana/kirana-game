@@ -2206,7 +2206,7 @@ function sanitizeFridgeAllocation(value: unknown) {
   return { milk, cold_drinks: coldDrinks, buffer };
 }
 
-function buildHeuristicAction(observation: RunObservation, profile: string): PlayerActions {
+export function buildHeuristicAction(observation: RunObservation, profile: string): PlayerActions {
   const state = GameState.fromSerialized(observation.state);
   const lastResult = state.history.at(-1)?.results;
   const actions = normalizeActions({});

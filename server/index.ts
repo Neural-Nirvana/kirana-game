@@ -6,6 +6,12 @@ import type { PlayerActions, RunObservation } from '../src/types';
 import { PRODUCTS, DEFAULT_CONFIG } from '../src/constants/products';
 import { GameState } from '../src/game/GameState';
 import { createAiArena, type ArenaStartRequest } from './ai-arena';
+import {
+  buildTrainingExample,
+  exportJsonl,
+  generateHeuristicDatasetRuns,
+  listTrainingExamplesForRun,
+} from './dataset-lab';
 import { openDatabase } from './db';
 import { loadLocalEnv } from './env';
 import { normalizeActions } from './marketing-engine';
@@ -246,6 +252,81 @@ app.get('/api/arena/runs/:arenaId', async (request) => {
 app.post('/api/arena/runs/:arenaId/resume', async (request) => {
   const { arenaId } = request.params as { arenaId: string };
   return arena.resume(arenaId);
+});
+
+app.get('/api/dataset/stats', async () => store.getDatasetStats());
+
+app.get('/api/dataset/runs', async (request) => {
+  const query = request.query as {
+    source?: 'all' | 'human' | 'ai' | 'heuristic';
+    status?: string;
+    minScore?: string;
+    completeOnly?: string;
+    limit?: string;
+  } | undefined;
+  return {
+    runs: store.listDatasetRuns({
+      source: query?.source ?? 'all',
+      status: query?.status,
+      minScore: query?.minScore ? Number(query.minScore) : undefined,
+      completeOnly: query?.completeOnly === '1' || query?.completeOnly === 'true',
+      limit: query?.limit ? Number(query.limit) : undefined,
+    }),
+  };
+});
+
+app.get('/api/dataset/runs/:runId', async (request) => {
+  const { runId } = request.params as { runId: string };
+  const meta = store.getDatasetRunMeta(runId);
+  const examples = listTrainingExamplesForRun(store, runId).map((example) => ({
+    day: example.day,
+    dayReward: example.dayReward,
+    cumulativeScore: example.cumulativeScore,
+    trustAfter: example.trustAfter,
+    stockouts: example.stockouts,
+    visits: example.visits,
+    missedUnits: example.missedUnits,
+    sourceTag: example.sourceTag,
+    hasRationale: Boolean(example.rationale),
+    signals: example.signals,
+    action: example.action,
+    rationale: example.rationale,
+    outcome: example.outcome,
+  }));
+  return { meta, examples };
+});
+
+app.get('/api/dataset/runs/:runId/examples/:day', async (request) => {
+  const { runId, day } = request.params as { runId: string; day: string };
+  return buildTrainingExample(store, runId, Number(day));
+});
+
+app.post('/api/dataset/generate/heuristic', async (request) => {
+  const body = request.body as {
+    count?: number;
+    seedStart?: number;
+    maxDays?: number;
+    profile?: string;
+  } | undefined;
+  const count = Math.max(1, Math.min(20, Math.round(body?.count ?? 3)));
+  const seedStart = Math.round(body?.seedStart ?? 20260701);
+  const maxDays = Math.max(1, Math.min(30, Math.round(body?.maxDays ?? 30)));
+  return generateHeuristicDatasetRuns(store, { count, seedStart, maxDays, profile: body?.profile });
+});
+
+app.post('/api/dataset/export', async (request, reply) => {
+  const body = request.body as {
+    runIds?: string[];
+    source?: 'all' | 'human' | 'ai' | 'heuristic';
+    minDayReward?: number;
+    minTotalScore?: number;
+    completeOnly?: boolean;
+    limitRuns?: number;
+  } | undefined;
+  const jsonl = exportJsonl(store, body ?? {});
+  reply.header('Content-Type', 'application/x-ndjson; charset=utf-8');
+  reply.header('Content-Disposition', 'attachment; filename="dukaanbench-sft.jsonl"');
+  return reply.send(jsonl);
 });
 
 app.post('/api/llm-day-context', async (request, reply) => {

@@ -765,15 +765,18 @@ export class RunStore {
       wasteLoss += result.wasteLoss;
       if (result.stockouts > 0) stockoutDays += 1;
       stockoutIncidents += result.stockouts;
-      marketingSpend += result.marketingPerformance.spendToday;
-      marketingScore += result.marketingPerformance.score;
-      marketingMargin += result.marketingPerformance.targetGrossMargin;
-      marketingMissedUnits += result.marketingPerformance.missedTargetUnits;
-      if (result.marketingPerformance.activeCampaigns > 0) marketingActiveDays += 1;
-      for (const visit of result.customerVisits) {
+      const marketing = result.marketingPerformance;
+      if (marketing) {
+        marketingSpend += marketing.spendToday ?? 0;
+        marketingScore += marketing.score ?? 0;
+        marketingMargin += marketing.targetGrossMargin ?? 0;
+        marketingMissedUnits += marketing.missedTargetUnits ?? 0;
+        if ((marketing.activeCampaigns ?? 0) > 0) marketingActiveDays += 1;
+      }
+      for (const visit of result.customerVisits ?? []) {
         revenue += visit.revenue;
       }
-      for (const movement of result.inventoryMovements) {
+      for (const movement of result.inventoryMovements ?? []) {
         soldUnits += movement.sold;
         missedUnits += movement.missedDemand;
         productDemand[movement.productId] ??= { sold: 0, missed: 0 };
@@ -978,6 +981,212 @@ export class RunStore {
       cost: row.cost,
       actualResult: row.actual_result_json ? parseJson(row.actual_result_json) : undefined,
     }));
+  }
+
+  getDatasetStats() {
+    const rows = this.db.prepare(`
+      SELECT
+        player_type,
+        status,
+        COUNT(*) AS run_count,
+        COALESCE(SUM(day_counts.days_completed), 0) AS step_count
+      FROM game_runs
+      LEFT JOIN (
+        SELECT run_id, COUNT(day) AS days_completed
+        FROM day_results
+        GROUP BY run_id
+      ) AS day_counts ON day_counts.run_id = game_runs.id
+      GROUP BY player_type, status
+    `).all() as Array<{ player_type: PlayerType; status: string; run_count: number; step_count: number }>;
+
+    let humanRuns = 0;
+    let aiRuns = 0;
+    let heuristicRuns = 0;
+    let totalSteps = 0;
+    let completeRuns = 0;
+
+    for (const row of rows) {
+      totalSteps += row.step_count;
+      if (row.status === 'complete') completeRuns += row.run_count;
+      if (row.player_type === 'human') humanRuns += row.run_count;
+      else aiRuns += row.run_count;
+    }
+
+    const heuristicRow = this.db.prepare(`
+      SELECT COUNT(DISTINCT run_id) AS count
+      FROM ai_players
+      WHERE model LIKE '%heuristic%'
+    `).get() as { count: number };
+    heuristicRuns = heuristicRow.count;
+
+    return {
+      humanRuns,
+      aiRuns,
+      heuristicRuns,
+      completeRuns,
+      totalSteps,
+      exportableExamples: totalSteps,
+    };
+  }
+
+  listDatasetRuns(options: {
+    source?: 'all' | 'human' | 'ai' | 'heuristic';
+    status?: string;
+    minScore?: number;
+    completeOnly?: boolean;
+    limit?: number;
+  } = {}) {
+    const limit = options.limit ?? 80;
+    const filters: string[] = ['1 = 1'];
+    const args: unknown[] = [];
+
+    if (options.source === 'human') {
+      filters.push('game_runs.player_type = ?');
+      args.push('human');
+    } else if (options.source === 'ai') {
+      filters.push('game_runs.player_type = ?');
+      args.push('ai');
+      filters.push(`(ai_players.model IS NULL OR ai_players.model NOT LIKE '%heuristic%')`);
+    } else if (options.source === 'heuristic') {
+      filters.push('game_runs.player_type = ?');
+      args.push('ai');
+      filters.push(`ai_players.model LIKE '%heuristic%'`);
+    }
+
+    if (options.status) {
+      filters.push('game_runs.status = ?');
+      args.push(options.status);
+    }
+    if (options.completeOnly) {
+      filters.push(`game_runs.status = 'complete'`);
+    }
+    if (options.minScore !== undefined) {
+      filters.push('game_runs.total_score >= ?');
+      args.push(options.minScore);
+    }
+
+    const rows = this.db.prepare(`
+      SELECT
+        game_runs.id AS run_id,
+        game_runs.player_type,
+        game_runs.run_name,
+        game_runs.status,
+        game_runs.total_score,
+        game_runs.created_at,
+        game_runs.updated_at,
+        COALESCE(day_counts.days_completed, 0) AS days_completed,
+        players.display_name AS player_name,
+        ai_players.model AS ai_model,
+        json_extract(game_runs.state_json, '$.runSeed') AS run_seed,
+        COALESCE(decision_counts.rationale_days, 0) AS rationale_days
+      FROM game_runs
+      LEFT JOIN (
+        SELECT run_id, COUNT(day) AS days_completed
+        FROM day_results
+        GROUP BY run_id
+      ) AS day_counts ON day_counts.run_id = game_runs.id
+      LEFT JOIN players ON players.id = game_runs.player_id
+      LEFT JOIN ai_players ON ai_players.run_id = game_runs.id
+      LEFT JOIN (
+        SELECT run_id, COUNT(*) AS rationale_days
+        FROM ai_decisions
+        WHERE rationale IS NOT NULL AND rationale != ''
+        GROUP BY run_id
+      ) AS decision_counts ON decision_counts.run_id = game_runs.id
+      WHERE ${filters.join(' AND ')}
+      ORDER BY game_runs.total_score DESC, days_completed DESC, game_runs.updated_at DESC
+      LIMIT ?
+    `).all(...args, limit) as Array<{
+      run_id: string;
+      player_type: PlayerType;
+      run_name: string | null;
+      status: string;
+      total_score: number;
+      created_at: string;
+      updated_at: string;
+      days_completed: number;
+      player_name: string | null;
+      ai_model: string | null;
+      run_seed: number | null;
+      rationale_days: number;
+    }>;
+
+    return rows.map((row) => ({
+      runId: row.run_id,
+      playerType: row.player_type,
+      runName: row.run_name ?? undefined,
+      status: row.status,
+      daysCompleted: row.days_completed,
+      totalScore: row.total_score,
+      runSeed: row.run_seed == null ? undefined : Number(row.run_seed),
+      playerName: row.player_name ?? undefined,
+      aiModel: row.ai_model ?? undefined,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+      exampleCount: row.days_completed,
+      hasRationale: row.rationale_days > 0,
+      sourceTag: row.player_type === 'human'
+        ? 'human' as const
+        : row.ai_model?.includes('heuristic')
+          ? 'heuristic' as const
+          : 'ai' as const,
+    }));
+  }
+
+  getDatasetRunMeta(runId: string) {
+    const row = this.getRunRow(runId);
+    const daysCompleted = this.db.prepare(`
+      SELECT COUNT(day) AS count FROM day_results WHERE run_id = ?
+    `).get(runId) as { count: number };
+    const aiPlayer = this.db.prepare(`
+      SELECT model FROM ai_players WHERE run_id = ? ORDER BY rowid ASC LIMIT 1
+    `).get(runId) as { model: string } | undefined;
+    const player = row.player_id ? this.getPlayer(row.player_id) : undefined;
+    const state = GameState.fromSerialized(parseJson<SerializedGameState>(row.state_json));
+
+    return {
+      runId,
+      playerType: row.player_type,
+      runName: row.run_name ?? undefined,
+      status: row.status,
+      totalScore: row.total_score,
+      daysCompleted: daysCompleted.count,
+      runSeed: state.runSeed,
+      playerName: player?.displayName,
+      aiModel: aiPlayer?.model,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  }
+
+  buildObservationFromState(
+    runId: string,
+    state: GameState,
+    campaigns: MarketingCampaignInstance[],
+    playerType: PlayerType
+  ): RunObservation {
+    const lastLog = state.history[state.history.length - 1];
+    const done = state.isGameOver();
+    return {
+      runId,
+      playerType,
+      state: state.toSerialized(),
+      visibleState: state.getVisibleState(),
+      done,
+      activeMarketing: getVisibleMarketingCampaigns(campaigns, state.day),
+      availableMarketing: getAvailableCampaigns(Math.min(state.day, state.config.maxDays)),
+      scores: {
+        total: state.getTotalScore(),
+        lastDay: lastLog?.results.rewardBreakdown.total ?? 0,
+      },
+    };
+  }
+
+  getMemorySummary(runId: string, day: number) {
+    const row = this.db.prepare(`
+      SELECT summary_json FROM ai_memory_summaries WHERE run_id = ? AND day = ?
+    `).get(runId, day) as { summary_json: string } | undefined;
+    return row ? parseJson(row.summary_json) : undefined;
   }
 
   private getPlayer(playerId: string) {

@@ -85,12 +85,15 @@ export class AboutPage {
             <div class="about-nav-sections">
               <a href="#challenge" data-section="challenge">Challenge</a>
               <a href="#how-it-works" data-section="how-it-works">Loop</a>
+              <a href="#system" data-section="system">Harness</a>
               <a href="#world" data-section="world">World</a>
               <a href="#proof" data-section="proof">Proof</a>
+              <a href="#metrics" data-section="metrics">Metrics</a>
               <a href="#arena" data-section="arena">Arena</a>
               <a href="#modes" data-section="modes">Play</a>
             </div>
             <div class="about-nav-cta">
+              <a class="about-btn about-btn-ghost" href="/lab">Dataset Lab</a>
               <a class="about-btn about-btn-ghost" href="/">Play</a>
               <a class="about-btn about-btn-primary" href="/arena-2">Watch Arena</a>
             </div>
@@ -108,8 +111,9 @@ export class AboutPage {
               </span>
               <h1>Can an AI run a <em>kirana</em> for 30 days?</h1>
               <p class="about-hero-lead">
-                ${PRODUCT_NAME} tests AI shopkeepers in ${SHOP_NAME} — a backend-owned kirana on ${SHOP_LOCATION}.
-                One JSON plan per day. Real customers. Real stockouts. Real trust.
+                ${PRODUCT_NAME} is a business-operator benchmark where LLMs run ${SHOP_NAME},
+                a fixed Indian kirana on ${SHOP_LOCATION}. One JSON plan per day.
+                The simulator decides what customers actually do.
               </p>
               <div class="about-hero-actions">
                 <a class="about-btn about-btn-primary" href="/arena-2">Watch AI Replay Theatre</a>
@@ -120,7 +124,7 @@ export class AboutPage {
                 <div class="about-stat"><strong>30</strong><span>Day episodes</span></div>
                 <div class="about-stat"><strong>1</strong><span>JSON plan / day</span></div>
                 <div class="about-stat"><strong>${households}</strong><span>Homes in catchment</span></div>
-                <div class="about-stat"><strong>∞</strong><span>Model comparisons</span></div>
+                <div class="about-stat"><strong>7</strong><span>Reward buckets</span></div>
               </div>
             </div>
             <div class="about-hero-visual about-reveal about-reveal-delay-1 visible">
@@ -148,8 +152,8 @@ export class AboutPage {
         <section class="about-quote-band about-reveal">
           <p>
             This is not a chatbot wearing a shop skin.
-            <em>It is a measurable test</em> of whether an AI can read neighborhood signals,
-            protect thin margins, stock perishables, manage khata, and earn customer trust —
+            <em>It is a measurable test</em> of whether an AI can operate under cash pressure,
+            uncertain demand, perishable stock, informal credit, marketing choices, and customer trust —
             one shop day at a time.
           </p>
         </section>
@@ -222,6 +226,25 @@ export class AboutPage {
           </div>
         </section>
 
+        <section class="about-section about-section--alt" id="system">
+          <div class="about-section-head about-reveal">
+            <span>The harness</span>
+            <h2>How an LLM becomes the shopkeeper</h2>
+            <p>
+              ${PRODUCT_NAME} is built like an agent environment: the model observes a compact business state,
+              emits an action JSON, then the backend runs the day and returns reward.
+            </p>
+          </div>
+          <div class="about-system-grid about-reveal">
+            ${systemCard('01', 'World generator', 'Fixed neighborhood, day-of-week, weather, events, schools, societies, commuters, and customer segments.')}
+            ${systemCard('02', 'Observation packet', 'Cash, trust, shelf stock, perishability, khata, active marketing, recent history, and fair planning signals.')}
+            ${systemCard('03', 'Action contract', 'The AI must emit executable JSON: orders, discounts, marketing campaigns, khata reminders, and cash reserve.')}
+            ${systemCard('04', 'Validation layer', 'Malformed JSON, impossible orders, over-budget plans, and rationale/action mismatches are caught before simulation.')}
+            ${systemCard('05', 'Simulation engine', 'Customers arrive, ask for baskets, pay cash or khata, face stockouts, and update relationship memory.')}
+            ${systemCard('06', 'Replay database', 'SQLite stores runs, day results, decisions, provider responses, retries, fallbacks, and replay timelines.')}
+          </div>
+        </section>
+
         <section class="about-section about-section--alt" id="world">
           <div class="about-section-head about-reveal">
             <span>Fixed test world</span>
@@ -290,6 +313,27 @@ export class AboutPage {
           </div>
         </section>
 
+        <section class="about-section about-section--alt" id="metrics">
+          <div class="about-section-head about-reveal">
+            <span>Good, bad, ugly</span>
+            <h2>What makes an AI shopkeeper win or lose?</h2>
+            <p>
+              The score is not a single profit number. A model can make cash and still fail if it trains customers
+              to stop trusting the shop.
+            </p>
+          </div>
+          <div class="about-metric-board about-reveal">
+            ${metricCard(effectRewardUrl, 'Service', 'Good', 'Fulfill demand, especially essentials like milk, bread, eggs, and cold drinks during heat.')}
+            ${metricCard(effectCashUrl, 'Money', 'Good', 'Grow revenue and profit while keeping enough cash for tomorrow\'s correction order.')}
+            ${metricCard(effectWarningUrl, 'Inventory', 'Bad', 'Stockouts, missed demand, and overbuying perishables punish short-term thinking.')}
+            ${metricCard(effectTrustUrl, 'Relationships', 'Ugly', 'Repeated misses for regulars reduce future visits. Trust is the long-term moat.')}
+            ${metricCard(effectCustomersUrl, 'Marketing', 'Conditional', 'Campaigns score only when promoted demand can actually be served profitably.')}
+            ${metricCard(effectKhataUrl, 'Khata', 'Risk', 'Credit can protect loyalty, but unpaid balance weakens restocking power.')}
+            ${metricCard(effectWarningUrl, 'Penalties', 'Ugly', 'Invalid actions, over-budget plans, fallbacks, and brittle JSON hurt the benchmark record.')}
+            ${metricCard(effectRewardUrl, 'Final health', 'Outcome', 'A strong run ends with profit, cash, trust, low waste, high service, and few stockouts.')}
+          </div>
+        </section>
+
         <section class="about-theater-section" id="arena">
           <div class="about-section-head about-reveal">
             <span>${PRODUCT_NAME} Arena</span>
@@ -337,7 +381,7 @@ export class AboutPage {
               <h3>Judge the AI</h3>
               <p>
                 Pick a model, start a live 30-day run, or replay a saved benchmark instantly.
-                Watch each day's plan get tested by simulated customers and scored.
+                Watch each day's JSON plan get tested by simulated customers and scored.
               </p>
               <a class="about-btn about-btn-primary" href="/arena-2">Open Arena v2</a>
             </article>
@@ -474,6 +518,29 @@ function bentoCard(icon: string, title: string, body: string, variant: string, d
 
 function term(label: string, value: string) {
   return `<div class="about-term"><em>${escapeHtml(label)}</em><strong>${escapeHtml(value)}</strong></div>`;
+}
+
+function systemCard(index: string, title: string, body: string) {
+  return `
+    <article class="about-system-card">
+      <span>${escapeHtml(index)}</span>
+      <h3>${escapeHtml(title)}</h3>
+      <p>${escapeHtml(body)}</p>
+    </article>
+  `;
+}
+
+function metricCard(icon: string, title: string, label: string, body: string) {
+  return `
+    <article class="about-metric-card">
+      <img src="${icon}" alt="" />
+      <div>
+        <span>${escapeHtml(label)}</span>
+        <h3>${escapeHtml(title)}</h3>
+        <p>${escapeHtml(body)}</p>
+      </div>
+    </article>
+  `;
 }
 
 function segment(icon: string, title: string, body: string) {
