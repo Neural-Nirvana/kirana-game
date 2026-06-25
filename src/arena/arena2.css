@@ -152,6 +152,11 @@
   box-shadow: 0 0 6px rgba(74, 222, 128, 0.6);
 }
 
+.a2-backend-dot.pending {
+  background: var(--a2-gold);
+  box-shadow: 0 0 6px rgba(251, 191, 36, 0.5);
+}
+
 .a2-backend-dot.offline {
   background: var(--a2-red);
 }
@@ -1566,6 +1571,123 @@
 
 .a2-tab-head .good { color: var(--a2-green); }
 .a2-tab-head .bad { color: var(--a2-red); }
+
+.a2-audit-empty {
+  font-size: 11px;
+  line-height: 1.5;
+  color: #94a3b8;
+}
+
+.a2-audit-list {
+  display: grid;
+  gap: 10px;
+}
+
+.a2-audit-attempt {
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 10px;
+  padding: 10px;
+  background: rgba(15, 23, 42, 0.55);
+}
+
+.a2-audit-attempt.good { border-color: rgba(74, 222, 128, 0.28); }
+.a2-audit-attempt.warn { border-color: rgba(245, 158, 11, 0.35); }
+.a2-audit-attempt.bad { border-color: rgba(248, 113, 113, 0.35); }
+
+.a2-audit-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 11px;
+}
+
+.a2-audit-head strong {
+  color: #e2e8f0;
+}
+
+.a2-audit-head span {
+  color: #94a3b8;
+  font-weight: 700;
+}
+
+.a2-audit-meta {
+  display: grid;
+  gap: 4px;
+  margin: 0 0 8px;
+  font-size: 10px;
+}
+
+.a2-audit-meta div {
+  display: grid;
+  grid-template-columns: 64px 1fr;
+  gap: 6px;
+}
+
+.a2-audit-meta dt {
+  color: #64748b;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.a2-audit-meta dd {
+  margin: 0;
+  color: #cbd5e1;
+  overflow-wrap: anywhere;
+}
+
+.a2-audit-error {
+  margin-bottom: 8px;
+  padding: 8px;
+  border-radius: 8px;
+  background: rgba(127, 29, 29, 0.28);
+  border: 1px solid rgba(248, 113, 113, 0.28);
+}
+
+.a2-audit-error span {
+  display: block;
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: #fecaca;
+  margin-bottom: 4px;
+}
+
+.a2-audit-error p {
+  margin: 0;
+  font-size: 10px;
+  line-height: 1.45;
+  color: #fee2e2;
+}
+
+.a2-audit-block {
+  margin-top: 6px;
+}
+
+.a2-audit-block summary {
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 800;
+  color: #7dd3fc;
+  margin-bottom: 4px;
+}
+
+.a2-audit-pre {
+  margin: 0;
+  padding: 8px;
+  max-height: 240px;
+  overflow: auto;
+  border-radius: 8px;
+  background: rgba(2, 6, 23, 0.72);
+  border: 1px solid rgba(51, 65, 85, 0.65);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  line-height: 1.45;
+  color: #e2e8f0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 
 /* Action cards */
 .a2-action-cards {

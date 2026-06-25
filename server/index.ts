@@ -183,6 +183,24 @@ app.get('/api/ai-runs/:runId', async (request) => {
   };
 });
 
+app.get('/api/ai-runs/:runId/provider-responses', async (request) => {
+  const { runId } = request.params as { runId: string };
+  const query = request.query as { day?: string; includeBodies?: string } | undefined;
+  const day = query?.day ? Number(query.day) : undefined;
+  if (query?.day && !Number.isFinite(day)) {
+    throw new Error('Invalid day query parameter');
+  }
+  const includeBodies = day !== undefined
+    || query?.includeBodies === 'true'
+    || query?.includeBodies === '1';
+  const responses = store.getAiProviderResponses(runId, { day, includeBodies });
+  return {
+    runId,
+    day,
+    responses,
+  };
+});
+
 app.get('/api/arena/system-prompt', async () => arena.systemPrompt());
 
 app.get('/api/arena/models', async () => arena.models());

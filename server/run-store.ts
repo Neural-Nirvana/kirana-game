@@ -413,6 +413,64 @@ export class RunStore {
     `).run(randomUUID(), runId, day, json(summary), new Date().toISOString());
   }
 
+  getAiProviderResponses(
+    runId: string,
+    options: { day?: number; includeBodies?: boolean } = {}
+  ) {
+    this.getRunRow(runId);
+    const filters = ['run_id = ?'];
+    const args: unknown[] = [runId];
+    if (options.day !== undefined) {
+      filters.push('day = ?');
+      args.push(options.day);
+    }
+    const includeBodies = options.includeBodies ?? options.day !== undefined;
+    const rows = this.db.prepare(`
+      SELECT
+        id, run_id, day, model, provider, transport, response_id, finish_reason,
+        usage_json, request_json, response_text, empty_content, error_class, raw_error, created_at
+      FROM ai_provider_responses
+      WHERE ${filters.join(' AND ')}
+      ORDER BY day ASC, created_at ASC
+    `).all(...args) as Array<{
+      id: string;
+      run_id: string;
+      day: number;
+      model: string;
+      provider: string | null;
+      transport: string | null;
+      response_id: string | null;
+      finish_reason: string | null;
+      usage_json: string | null;
+      request_json: string | null;
+      response_text: string | null;
+      empty_content: number;
+      error_class: string | null;
+      raw_error: string | null;
+      created_at: string;
+    }>;
+
+    return rows.map((row) => ({
+      id: row.id,
+      runId: row.run_id,
+      day: row.day,
+      model: row.model,
+      provider: row.provider ?? undefined,
+      transport: row.transport ?? undefined,
+      responseId: row.response_id ?? undefined,
+      finishReason: row.finish_reason ?? undefined,
+      usage: row.usage_json ? parseJson(row.usage_json) : undefined,
+      emptyContent: Boolean(row.empty_content),
+      errorClass: row.error_class ?? undefined,
+      rawError: row.raw_error ?? undefined,
+      createdAt: row.created_at,
+      requestJson: includeBodies && row.request_json ? parseJson(row.request_json) : undefined,
+      responseText: includeBodies ? row.response_text ?? undefined : undefined,
+      requestBytes: row.request_json?.length ?? 0,
+      responseBytes: row.response_text?.length ?? 0,
+    }));
+  }
+
   getAiDecisions(runId: string) {
     return this.db.prepare(`
       SELECT
@@ -506,12 +564,18 @@ export class RunStore {
         ai_players.model AS model,
         game_runs.status AS status,
         game_runs.total_score AS score,
-        game_runs.state_json AS state_json,
         game_runs.updated_at AS saved_at,
-        COUNT(day_results.day) AS days_completed
+        COALESCE(day_counts.days_completed, 0) AS days_completed,
+        MAX(arena_job_runs.final_cash) AS final_cash,
+        MAX(arena_job_runs.final_trust) AS final_trust
       FROM game_runs
       JOIN ai_players ON ai_players.run_id = game_runs.id
-      LEFT JOIN day_results ON day_results.run_id = game_runs.id
+      LEFT JOIN (
+        SELECT run_id, COUNT(day) AS days_completed
+        FROM day_results
+        GROUP BY run_id
+      ) AS day_counts ON day_counts.run_id = game_runs.id
+      LEFT JOIN arena_job_runs ON arena_job_runs.run_id = game_runs.id
       WHERE ${filters.join(' AND ')}
       GROUP BY game_runs.id, ai_players.model
       ORDER BY days_completed DESC, game_runs.updated_at DESC
@@ -521,21 +585,21 @@ export class RunStore {
       model: string;
       status: string;
       score: number;
-      state_json: string;
       saved_at: string;
       days_completed: number;
+      final_cash: number | null;
+      final_trust: number | null;
     }>;
 
     return rows.map((row) => {
-      const state = GameState.fromSerialized(parseJson<SerializedGameState>(row.state_json));
       return {
         runId: row.run_id,
         model: row.model,
         status: row.status,
         daysCompleted: row.days_completed,
         score: row.score,
-        finalCash: Math.round(state.cash),
-        finalTrust: Math.round(state.trust),
+        finalCash: row.final_cash == null ? undefined : Math.round(row.final_cash),
+        finalTrust: row.final_trust == null ? undefined : Math.round(row.final_trust),
         savedAt: row.saved_at,
       };
     });

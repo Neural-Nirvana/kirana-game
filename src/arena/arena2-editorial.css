@@ -1028,3 +1028,19 @@
 .a2-editorial .a2-status-card.error p {
   color: var(--a2-ink-soft);
 }
+
+.a2-editorial .a2-audit-empty { color: var(--a2-ink-muted); }
+.a2-editorial .a2-audit-attempt {
+  border-color: var(--a2-line);
+  background: var(--a2-cream);
+}
+.a2-editorial .a2-audit-head strong { color: var(--a2-ink); }
+.a2-editorial .a2-audit-head span { color: var(--a2-ink-muted); }
+.a2-editorial .a2-audit-meta dt { color: var(--a2-ink-muted); }
+.a2-editorial .a2-audit-meta dd { color: var(--a2-ink-soft); }
+.a2-editorial .a2-audit-block summary { color: var(--a2-indigo); }
+.a2-editorial .a2-audit-pre {
+  background: rgba(28, 21, 16, 0.06);
+  border-color: var(--a2-line);
+  color: var(--a2-ink);
+}

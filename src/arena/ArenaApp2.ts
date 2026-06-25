@@ -38,6 +38,8 @@ import {
   type ArenaProfile,
 } from './arena-shared';
 import type {
+  AiProviderResponseRecord,
+  AiProviderResponsesResponse,
   AiReplayResponse,
   ArenaJobResponse,
   ArenaLiveMetrics,
@@ -51,7 +53,7 @@ import type {
   ArenaScoreboardResponse,
 } from './arena-types';
 
-type DetailTab = 'actions' | 'thoughts' | 'results' | 'rewards' | 'report';
+type DetailTab = 'actions' | 'thoughts' | 'results' | 'rewards' | 'report' | 'audit';
 type SidebarSection = 'setup' | 'replays' | 'scoreboard';
 
 export class ArenaApp2 {
@@ -81,7 +83,11 @@ export class ArenaApp2 {
   private statusError = false;
   private sidebarCollapsed = false;
   private backendConnected = false;
+  private backendChecked = false;
   private introActive = true;
+  private providerAuditByDay = new Map<number, AiProviderResponseRecord[]>();
+  private providerAuditStatus: 'idle' | 'loading' | 'error' = 'idle';
+  private providerAuditError = '';
 
   constructor(rootId: string) {
     const root = document.getElementById(rootId);
@@ -129,13 +135,19 @@ export class ArenaApp2 {
   private async checkBackend() {
     try {
       await requestJson<{ ok: boolean }>('/api/health');
+      this.backendChecked = true;
       this.backendConnected = true;
       this.statusError = false;
+      this.statusMessage = 'Backend connected — indexing saved replays…';
+      this.renderHud();
+      this.renderSidebar();
     } catch {
+      this.backendChecked = true;
       this.backendConnected = false;
       this.statusError = true;
       this.statusMessage = 'Backend offline — run `npm run dev` to start the API server on port 8787.';
       this.renderHud();
+      this.renderSidebar();
     }
   }
 
@@ -153,10 +165,22 @@ export class ArenaApp2 {
     try {
       const response = await requestJson<ArenaReplayIndexResponse>('/api/arena/replays?status=complete&limit=40');
       this.indexedReplays = response.replays;
+      if (this.backendConnected && !this.arenaJob) {
+        this.statusError = false;
+        this.statusMessage = this.indexedReplays.length > 0
+          ? `${this.featuredReplaySummaries().length} replay-ready models loaded.`
+          : 'Backend connected — no completed replays yet.';
+      }
       this.renderSidebar();
       this.renderHud();
     } catch {
       this.indexedReplays = [];
+      if (this.backendConnected) {
+        this.statusError = true;
+        this.statusMessage = 'Backend connected, but saved replays could not be indexed.';
+        this.renderSidebar();
+        this.renderHud();
+      }
     }
   }
 
@@ -264,6 +288,33 @@ export class ArenaApp2 {
   private setTab(tab: DetailTab) {
     this.activeTab = tab;
     this.renderDetail(this.run?.days[this.activeDayIndex]);
+  }
+
+  private clearProviderAuditCache() {
+    this.providerAuditByDay.clear();
+    this.providerAuditStatus = 'idle';
+    this.providerAuditError = '';
+  }
+
+  private async ensureProviderAuditLoaded(dayNumber: number) {
+    if (!this.run || isHeuristicModel(this.run.days[0]?.model ?? '')) return;
+    if (this.providerAuditByDay.has(dayNumber) || this.providerAuditStatus === 'loading') return;
+    this.providerAuditStatus = 'loading';
+    this.providerAuditError = '';
+    this.renderDetail(this.run.days[this.activeDayIndex]);
+    try {
+      const response = await requestJson<AiProviderResponsesResponse>(
+        `/api/ai-runs/${encodeURIComponent(this.run.runId)}/provider-responses?day=${dayNumber}`
+      );
+      this.providerAuditByDay.set(dayNumber, response.responses);
+      this.providerAuditStatus = 'idle';
+    } catch (error) {
+      this.providerAuditStatus = 'error';
+      this.providerAuditError = error instanceof Error ? error.message : String(error);
+    }
+    if (this.run?.days[this.activeDayIndex]?.day === dayNumber) {
+      this.renderDetail(this.run.days[this.activeDayIndex]);
+    }
   }
 
   private toggleSidebar() {
@@ -461,6 +512,7 @@ export class ArenaApp2 {
     if (!sameRun) {
       this.activeDayIndex = 0;
       this.autoPlayedDays.clear();
+      this.clearProviderAuditCache();
       this.stage?.setDay(this.run.days[0]);
     } else {
       this.activeDayIndex = clamp(this.activeDayIndex, 0, Math.max(0, this.run.days.length - 1));
@@ -714,6 +766,16 @@ export class ArenaApp2 {
     const run = this.arenaJob ? primaryRun(this.arenaJob) : undefined;
     const displayModel = day?.model ?? run?.model ?? this.resolvedModel;
     const isLive = this.arenaJob?.status === 'running' || this.arenaJob?.status === 'queued';
+    const backendLabel = this.backendConnected
+      ? 'Backend connected'
+      : this.backendChecked
+        ? 'Backend offline'
+        : 'Connecting…';
+    const backendClass = this.backendConnected
+      ? 'online'
+      : this.backendChecked
+        ? 'offline'
+        : 'pending';
 
     this.requireElement('a2-topbar').innerHTML = `
       <div class="a2-brand">
@@ -739,8 +801,8 @@ export class ArenaApp2 {
         ].join('')}
       </div>
       <div class="a2-topbar-status">
-        <span class="a2-backend-dot ${this.backendConnected ? 'online' : 'offline'}"></span>
-        <span class="a2-backend-label">${this.backendConnected ? 'Backend connected' : 'Backend offline'}</span>
+        <span class="a2-backend-dot ${backendClass}"></span>
+        <span class="a2-backend-label">${backendLabel}</span>
       </div>
       <div class="a2-model-badge">
         <span>${escapeHtml(modelLabel(displayModel, this.modelPresets))}</span>
@@ -823,9 +885,9 @@ export class ArenaApp2 {
             </div>
           </div>
           <div class="a2-status-card ${this.statusError ? 'error' : ''}">
-            <span>${this.arenaJob?.status ?? (this.backendConnected ? 'ready' : 'offline')}</span>
+            <span>${this.arenaJob?.status ?? (this.backendConnected ? 'ready' : this.backendChecked ? 'offline' : 'connecting')}</span>
             <p>${escapeHtml(this.statusMessage)}</p>
-            ${!this.backendConnected ? '<button class="a2-retry-btn" data-a2-action="retry-backend" type="button">Retry connection</button>' : ''}
+            ${this.backendChecked && !this.backendConnected ? '<button class="a2-retry-btn" data-a2-action="retry-backend" type="button">Retry connection</button>' : ''}
             ${this.arenaJob ? `
               <div class="a2-progress-bar">
                 <div class="a2-progress-fill" style="width:${Math.round((completedDays / maxDaysDisplay) * 100)}%"></div>
@@ -989,6 +1051,7 @@ export class ArenaApp2 {
     const tabs: Array<{ id: DetailTab; label: string; hint: string }> = [
       { id: 'actions', label: 'Plan', hint: 'AI actions' },
       { id: 'thoughts', label: 'Mind', hint: 'Thought stream' },
+      { id: 'audit', label: 'Audit', hint: 'Provider I/O' },
       { id: 'results', label: 'Stats', hint: 'Day results' },
       { id: 'rewards', label: 'Score', hint: 'Reward buckets' },
       { id: 'report', label: 'Log', hint: 'Inventory & visits' },
@@ -1007,6 +1070,10 @@ export class ArenaApp2 {
         </div>
       `;
       return;
+    }
+
+    if (this.activeTab === 'audit') {
+      void this.ensureProviderAuditLoaded(day.day);
     }
 
     const live = this.liveMetricsFor(day);
@@ -1035,10 +1102,74 @@ export class ArenaApp2 {
           <div class="a2-detail-body">
             ${this.activeTab === 'actions' ? renderActionsTab(day) : ''}
             ${this.activeTab === 'thoughts' ? renderThoughtsTab(day) : ''}
+            ${this.activeTab === 'audit' ? this.renderAuditTab(day) : ''}
             ${this.activeTab === 'results' ? renderResultsTab(day, live) : ''}
             ${this.activeTab === 'rewards' ? renderRewardsTab(day) : ''}
             ${this.activeTab === 'report' ? renderReportTab(day) : ''}
           </div>
+        </div>
+      </div>
+    `;
+  }
+
+  private renderAuditTab(day: ArenaReplayDay) {
+    if (isHeuristicModel(day.model)) {
+      return `
+        <div class="a2-tab-content">
+          <header class="a2-tab-head">
+            <h3>Provider Audit</h3>
+            <span>local baseline</span>
+          </header>
+          <p class="a2-audit-empty">Built-in heuristic runs do not call OpenRouter, so no provider request/response audit is stored.</p>
+        </div>
+      `;
+    }
+
+    if (this.providerAuditStatus === 'loading' && !this.providerAuditByDay.has(day.day)) {
+      return `
+        <div class="a2-tab-content">
+          <header class="a2-tab-head">
+            <h3>Provider Audit</h3>
+            <span>loading…</span>
+          </header>
+          <p class="a2-audit-empty">Fetching saved OpenRouter request and response for Day ${pad(day.day)}…</p>
+        </div>
+      `;
+    }
+
+    if (this.providerAuditStatus === 'error') {
+      return `
+        <div class="a2-tab-content">
+          <header class="a2-tab-head">
+            <h3>Provider Audit</h3>
+            <span class="bad">error</span>
+          </header>
+          <p class="a2-audit-empty">${escapeHtml(this.providerAuditError)}</p>
+        </div>
+      `;
+    }
+
+    const attempts = this.providerAuditByDay.get(day.day) ?? [];
+    if (attempts.length === 0) {
+      return `
+        <div class="a2-tab-content">
+          <header class="a2-tab-head">
+            <h3>Provider Audit</h3>
+            <span>${escapeHtml(day.model)}</span>
+          </header>
+          <p class="a2-audit-empty">No provider request/response saved for this day. Older runs may only have decision metadata.</p>
+        </div>
+      `;
+    }
+
+    return `
+      <div class="a2-tab-content">
+        <header class="a2-tab-head">
+          <h3>Provider Audit</h3>
+          <span>${attempts.length} attempt${attempts.length === 1 ? '' : 's'}</span>
+        </header>
+        <div class="a2-audit-list">
+          ${attempts.map((attempt, index) => renderProviderAttempt(attempt, index)).join('')}
         </div>
       </div>
     `;
@@ -1191,6 +1322,49 @@ function metricPill(label: string, value: string, sub = '', tone = '') {
       <span>${escapeHtml(label)}</span>
       <strong>${escapeHtml(value)}</strong>
       ${sub ? `<small>${escapeHtml(sub)}</small>` : ''}
+    </article>
+  `;
+}
+
+function renderProviderAttempt(attempt: AiProviderResponseRecord, index: number) {
+  const usage = attempt.usage as { cost?: number; input_tokens?: number; output_tokens?: number } | undefined;
+  const usageLabel = usage
+    ? `${usage.input_tokens ?? '—'} in · ${usage.output_tokens ?? '—'} out${usage.cost !== undefined ? ` · $${usage.cost.toFixed(4)}` : ''}`
+    : 'usage n/a';
+  const statusClass = attempt.errorClass ? 'warn' : attempt.emptyContent ? 'bad' : 'good';
+  const statusLabel = attempt.errorClass
+    ? `validation · ${attempt.errorClass}`
+    : attempt.finishReason ?? 'completed';
+
+  return `
+    <article class="a2-audit-attempt ${statusClass}">
+      <header class="a2-audit-head">
+        <strong>Attempt ${index + 1}</strong>
+        <span>${escapeHtml(statusLabel)}</span>
+      </header>
+      <dl class="a2-audit-meta">
+        <div><dt>Provider</dt><dd>${escapeHtml(attempt.provider ?? '—')} · ${escapeHtml(attempt.transport ?? '—')}</dd></div>
+        <div><dt>Response</dt><dd>${escapeHtml(shortId(attempt.responseId ?? '—'))} · ${usageLabel}</dd></div>
+        <div><dt>Payload</dt><dd>${attempt.requestBytes.toLocaleString('en-IN')} B req · ${attempt.responseBytes.toLocaleString('en-IN')} B resp</dd></div>
+      </dl>
+      ${attempt.rawError ? `
+        <div class="a2-audit-error">
+          <span>Validator</span>
+          <p>${escapeHtml(attempt.rawError)}</p>
+        </div>
+      ` : ''}
+      ${attempt.responseText ? `
+        <details class="a2-audit-block" open>
+          <summary>Response text</summary>
+          <pre class="a2-audit-pre">${escapeHtml(attempt.responseText)}</pre>
+        </details>
+      ` : ''}
+      ${attempt.requestJson ? `
+        <details class="a2-audit-block">
+          <summary>Request JSON</summary>
+          <pre class="a2-audit-pre">${escapeHtml(JSON.stringify(attempt.requestJson, null, 2))}</pre>
+        </details>
+      ` : ''}
     </article>
   `;
 }

@@ -67,6 +67,32 @@ export interface AiReplayResponse {
   };
 }
 
+export interface AiProviderResponseRecord {
+  id: string;
+  runId: string;
+  day: number;
+  model: string;
+  provider?: string;
+  transport?: string;
+  responseId?: string;
+  finishReason?: string;
+  usage?: unknown;
+  emptyContent: boolean;
+  errorClass?: string;
+  rawError?: string;
+  createdAt: string;
+  requestJson?: unknown;
+  responseText?: string;
+  requestBytes: number;
+  responseBytes: number;
+}
+
+export interface AiProviderResponsesResponse {
+  runId: string;
+  day?: number;
+  responses: AiProviderResponseRecord[];
+}
+
 export type ArenaMode = 'llm' | 'heuristic';
 export type ArenaStatus = 'queued' | 'running' | 'complete' | 'failed';
 export type ArenaRunStatus = 'queued' | 'running' | 'complete' | 'failed';
