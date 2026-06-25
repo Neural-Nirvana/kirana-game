@@ -913,7 +913,7 @@ export class ArenaApp2 {
               ${this.recentReplays.length > 0 ? '<button data-a2-action="clear-replays" type="button">Clear local</button>' : ''}
             </div>
             <p class="a2-hint">${totalReplayRuns > replays.length
-              ? `Best run per model · ${totalReplayRuns} total saved runs in SQLite`
+              ? `Best run per model · ${totalReplayRuns} saved replays on record`
               : 'Best completed run per model'}</p>
             ${replays.length === 0 ? '<p class="a2-empty">No completed replays yet. Start a live run first.</p>' : `
               <div class="a2-replay-list">
@@ -938,7 +938,7 @@ export class ArenaApp2 {
         ${this.sidebarSection === 'scoreboard' ? `
           <div class="a2-panel">
             <h2>Model Leaderboard</h2>
-            <p class="a2-hint">Completed 30-day benchmark runs from SQLite.</p>
+            <p class="a2-hint">Completed 30-day runs, ranked by final score.</p>
             ${this.scoreboardRows.length === 0 ? '<p class="a2-empty">No scoreboard data yet.</p>' : `
               <div class="a2-scoreboard-wrap">
                 <table class="a2-scoreboard">

@@ -487,7 +487,7 @@ export class AboutPage {
       return `
         <div class="about-leaderboard-panel about-leaderboard-loading">
           <span class="about-leaderboard-spinner" aria-hidden="true"></span>
-          <p>Loading benchmark runs from SQLite…</p>
+          <p>Loading leaderboard…</p>
         </div>
       `;
     }
