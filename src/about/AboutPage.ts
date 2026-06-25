@@ -34,6 +34,7 @@ import productMaggiUrl from '../assets/arena/product-maggi.png';
 import morningUrl from '../assets/live-shop/morning.webp';
 import afternoonUrl from '../assets/live-shop/afternoon.webp';
 import eveningUrl from '../assets/live-shop/evening.webp';
+import dukaanbenchLogoUrl from '../assets/dukaanbench-logo.png';
 
 export class AboutPage {
   private readonly root: HTMLElement;
@@ -109,23 +110,23 @@ export class AboutPage {
           </div>
           <div class="about-nav-inner">
             <div class="about-brand">
-              <a href="#top">
-                <strong>${PRODUCT_NAME}</strong>
-                <span>${PRODUCT_TAGLINE}</span>
+              <a href="#top" class="about-brand-link">
+                <img class="about-brand-logo" src="${dukaanbenchLogoUrl}" alt="${PRODUCT_NAME}" width="168" height="48" decoding="async" />
+                <span class="about-brand-tagline">${PRODUCT_TAGLINE}</span>
               </a>
             </div>
             <div class="about-nav-sections">
               <a href="#leaderboard" data-section="leaderboard">Leaderboard</a>
               <a href="#challenge" data-section="challenge">Challenge</a>
-              <a href="#how-it-works" data-section="how-it-works">Loop</a>
+              <a href="#how-it-works" data-section="how-it-works">How it works</a>
               <a href="#system" data-section="system">Harness</a>
               <a href="#world" data-section="world">World</a>
               <a href="#proof" data-section="proof">Proof</a>
-              <a href="#metrics" data-section="metrics">Metrics</a>
+              <a href="#metrics" data-section="metrics">Scores</a>
               <a href="#arena" data-section="arena">Arena</a>
             </div>
             <div class="about-nav-cta">
-              <a class="about-btn about-btn-primary" href="/arena-2">AI Replay Theatre</a>
+              <a class="about-btn about-btn-primary" href="/arena-2">Open AI Arena</a>
             </div>
           </div>
         </nav>
@@ -137,33 +138,38 @@ export class AboutPage {
             <div class="about-hero-copy about-reveal visible">
               <span class="about-eyebrow">
                 <span class="about-eyebrow-dot" aria-hidden="true"></span>
-                ${PRODUCT_NAME} · ${PRODUCT_TAGLINE}
+                AI business operator benchmark
               </span>
-              <h1>Can an AI run a <em>kirana</em> for 30 days?</h1>
+              <img class="about-hero-logo" src="${dukaanbenchLogoUrl}" alt="${PRODUCT_NAME}" width="360" height="103" decoding="async" />
               <p class="about-hero-lead">
-                ${PRODUCT_NAME} is a business-operator benchmark where LLMs run ${SHOP_NAME},
-                a fixed Indian kirana on ${SHOP_LOCATION}. One JSON plan per day.
-                The simulator decides what customers actually do.
+                Can an AI keep a neighborhood <em>kirana</em> alive for 30 days?
+                Models run ${SHOP_NAME}, a fixed Indian shop on ${SHOP_LOCATION}, by submitting
+                one executable JSON plan each morning. Customers, cash, stockouts, credit, waste,
+                trust, and marketing are then scored by the backend.
               </p>
+              <div class="about-hero-actions">
+                <a class="about-btn about-btn-primary about-btn-lg" href="/arena-2">Watch AI Arena</a>
+                <a class="about-btn about-btn-ghost about-btn-lg" href="/play">Play the shop</a>
+              </div>
               <div class="about-hero-stats">
-                <div class="about-stat"><strong>30</strong><span>Day episodes</span></div>
-                <div class="about-stat"><strong>1</strong><span>JSON plan / day</span></div>
-                <div class="about-stat"><strong>${households}</strong><span>Homes in catchment</span></div>
-                <div class="about-stat"><strong>7</strong><span>Reward buckets</span></div>
+                <div class="about-stat"><strong>30</strong><span>Simulated shop days</span></div>
+                <div class="about-stat"><strong>1</strong><span>Action JSON per day</span></div>
+                <div class="about-stat"><strong>${households}</strong><span>Nearby homes</span></div>
+                <div class="about-stat"><strong>7</strong><span>Scoring buckets</span></div>
               </div>
             </div>
             <div class="about-hero-leaderboard about-reveal visible" id="leaderboard">
               <div class="about-section-head about-hero-leaderboard-head">
-                <span>Live benchmark</span>
-                <h2>Model leaderboard</h2>
-                <p>Completed 30-day runs on the same ${SHOP_NAME} world — ranked by final backend score.</p>
+                <span>Current benchmark board</span>
+                <h2>Which model actually runs the shop?</h2>
+                <p>Completed 30-day runs on the same ${SHOP_NAME} world, ranked by backend reward and business health.</p>
               </div>
               <div id="about-leaderboard-mount">
                 ${this.renderLeaderboardBlock()}
               </div>
               <div class="about-home-cta">
-                <a class="about-btn about-btn-primary about-btn-lg" href="/arena-2">Watch AI Replay Theatre</a>
-                <p>Replay saved runs, watch customers walk in, and see how each model’s nightly JSON plan scored.</p>
+                <a class="about-btn about-btn-primary about-btn-lg" href="/arena-2">Open AI Arena</a>
+                <p>Replay saved runs, inspect the model's action JSON, and watch the day play out customer by customer.</p>
               </div>
             </div>
             <div class="about-hero-visual about-reveal about-reveal-delay-1 visible">
@@ -190,39 +196,38 @@ export class AboutPage {
 
         <section class="about-quote-band about-reveal">
           <p>
-            This is not a chatbot wearing a shop skin.
-            <em>It is a measurable test</em> of whether an AI can operate under cash pressure,
-            uncertain demand, perishable stock, informal credit, marketing choices, and customer trust —
-            one shop day at a time.
+            DukaanBench turns an LLM from an answer engine into an operator.
+            <em>The model does not get marks for sounding smart.</em> It gets marks for keeping shelves useful,
+            cash liquid, customers served, khata under control, and trust alive.
           </p>
         </section>
 
         <section class="about-section about-section--alt" id="challenge">
           <div class="about-section-head about-reveal">
-            <span>The operating reality</span>
-            <h2>Why kirana is a hard AI problem</h2>
+            <span>The operating problem</span>
+            <h2>Small shops make hard decisions every morning</h2>
             <p>
-              A real shopkeeper juggles cash, relationships, waste, weather, school timings,
-              and impulse commuters — often with incomplete information and no undo button.
+              Indian kiranas look simple from the outside. Inside, every day is a tight operating problem:
+              buy enough to serve demand, avoid dead stock, keep regulars happy, and never run out of cash.
             </p>
           </div>
           <div class="about-bento">
-            ${bentoCard(effectWarningUrl, 'Thin margins', 'Too little stock loses trust. Too much becomes waste. Every order ties up cash you may not get back today.', 'featured', 0)}
-            ${bentoCard(effectKhataUrl, 'Informal credit', 'Khata keeps relationships alive, but unpaid credit reduces usable cash for tomorrow\'s restock.', 'wide', 1)}
-            ${bentoCard(effectCustomersUrl, 'Neighborhood rhythm', 'Families, students, commuters, and walk-ins peak at different hours. One plan must serve all waves.', '', 2)}
-            ${bentoCard(effectTrustUrl, 'Trust is inventory', 'Miss milk once and a regular may forgive you. Miss it three days and they switch shops.', '', 3)}
-            ${bentoCard(effectCashUrl, 'Marketing vs stock', 'A loud offer without shelf stock damages reputation faster than no offer at all.', 'wide', 1)}
-            ${bentoCard(effectRewardUrl, 'Measurable proof', 'Every AI decision is validated, simulated, scored, and saved — no invented metrics, no hidden truth.', '', 2)}
+            ${bentoCard(effectWarningUrl, 'Thin-margin tradeoffs', 'Understock essentials and trust falls. Overstock perishables and cash quietly leaks away.', 'featured', 0)}
+            ${bentoCard(effectKhataUrl, 'Credit is relationship capital', 'Khata can save a sale and protect loyalty, but unpaid balances weaken tomorrow\'s buying power.', 'wide', 1)}
+            ${bentoCard(effectCustomersUrl, 'Neighborhood rhythm', 'Families, students, commuters, and walk-ins peak at different hours. The AI gets one morning plan for all of them.', '', 2)}
+            ${bentoCard(effectTrustUrl, 'Trust compounds', 'A missed packet of milk is not only a lost sale. For regulars, it changes whether they come back.', '', 3)}
+            ${bentoCard(effectCashUrl, 'Marketing can backfire', 'A discount campaign helps only when the promoted items are actually available on the shelf.', 'wide', 1)}
+            ${bentoCard(effectRewardUrl, 'Auditable outcomes', 'Actions, validation, simulation results, provider responses, retries, and replays are saved for inspection.', '', 2)}
           </div>
         </section>
 
         <section class="about-section" id="how-it-works">
           <div class="about-section-head about-reveal">
-            <span>The evaluation loop</span>
-            <h2>One episode. One step per day. One real reward.</h2>
+            <span>The benchmark loop</span>
+            <h2>One episode is a full month of shopkeeping</h2>
             <p>
-              The AI does not puppet customers directly. It submits a shopkeeper plan.
-              The backend simulates who walks in, what sells, what misses, and how trust moves.
+              The AI cannot puppet customers or edit the day after it starts. It reads the morning state,
+              submits a shopkeeper plan, and the backend tests that plan against simulated customer visits.
             </p>
           </div>
           <div class="about-loop-layout about-reveal">
@@ -230,36 +235,36 @@ export class AboutPage {
               <div class="about-timeline-step">
                 <strong>Step 01</strong>
                 <h3>Observe</h3>
-                <p>Weather, events, inventory, trust, cash, khata, and active marketing campaigns.</p>
+                <p>Day, weather, events, inventory, cash, trust, khata, active marketing, and recent history.</p>
               </div>
               <div class="about-timeline-step">
                 <strong>Step 02</strong>
                 <h3>Decide</h3>
-                <p>One JSON action: supplier orders, discounts, khata limits, and marketing picks.</p>
+                <p>One executable JSON action: restock, discounts, marketing, khata reminders, and cash discipline.</p>
               </div>
               <div class="about-timeline-step">
                 <strong>Step 03</strong>
                 <h3>Simulate</h3>
-                <p>Customers visit. Shelves move. Payments land. Waste accrues. Trust shifts.</p>
+                <p>Customers arrive, ask for baskets, receive or miss items, pay by cash or khata, and update trust.</p>
               </div>
               <div class="about-timeline-step">
                 <strong>Step 04</strong>
                 <h3>Score</h3>
-                <p>Reward after real visits — service rate, money, relationships, and marketing ROI.</p>
+                <p>The day reward measures service, inventory, money, relationships, marketing, operations, and penalties.</p>
               </div>
             </div>
             <aside class="about-loop-aside about-reveal about-reveal-delay-1">
-              <h3>OpenEnv-shaped, backend-owned</h3>
+              <h3>Agent-friendly, backend-owned</h3>
               <p>
-                The model sees signals and constraints. The simulator tests whether the plan survives contact with customers.
-                Every step is saved to SQLite for replay and fair model comparison.
+                The API is shaped like an environment loop, but the game state lives on the backend.
+                That keeps model runs resumable, replayable, and comparable across providers.
               </p>
               <div class="about-terms">
-                ${term('Episode', '30-day kirana run')}
-                ${term('Step', '1 shop day')}
+                ${term('Episode', '30 shop days')}
+                ${term('Step', '1 business day')}
                 ${term('Action', 'Pre-day JSON')}
-                ${term('Reward', 'Backend score')}
-                ${term('Proof', 'SQLite replay')}
+                ${term('Reward', 'Post-day score')}
+                ${term('Audit', 'SQLite replay')}
               </div>
             </aside>
           </div>
@@ -268,30 +273,30 @@ export class AboutPage {
         <section class="about-section about-section--alt" id="system">
           <div class="about-section-head about-reveal">
             <span>The harness</span>
-            <h2>How an LLM becomes the shopkeeper</h2>
+            <h2>How a model becomes a shop operator</h2>
             <p>
-              ${PRODUCT_NAME} is built like an agent environment: the model observes a compact business state,
-              emits an action JSON, then the backend runs the day and returns reward.
+              DukaanBench is a structured decision environment. The model receives business context,
+              returns a valid action JSON, and the simulator turns that choice into consequences.
             </p>
           </div>
           <div class="about-system-grid about-reveal">
-            ${systemCard('01', 'World generator', 'Fixed neighborhood, day-of-week, weather, events, schools, societies, commuters, and customer segments.')}
-            ${systemCard('02', 'Observation packet', 'Cash, trust, shelf stock, perishability, khata, active marketing, recent history, and fair planning signals.')}
-            ${systemCard('03', 'Action contract', 'The AI must emit executable JSON: orders, discounts, marketing campaigns, khata reminders, and cash reserve.')}
-            ${systemCard('04', 'Validation layer', 'Malformed JSON, impossible orders, over-budget plans, and rationale/action mismatches are caught before simulation.')}
-            ${systemCard('05', 'Simulation engine', 'Customers arrive, ask for baskets, pay cash or khata, face stockouts, and update relationship memory.')}
-            ${systemCard('06', 'Replay database', 'SQLite stores runs, day results, decisions, provider responses, retries, fallbacks, and replay timelines.')}
+            ${systemCard('01', 'Fixed world', 'The same neighborhood, societies, school, road flow, weather schedule, events, and customer segments for fair runs.')}
+            ${systemCard('02', 'Observation packet', 'Cash, trust, shelf stock, perishability, khata, active marketing, recent history, and planning signals.')}
+            ${systemCard('03', 'Action contract', 'The AI must emit executable JSON: product orders, discounts, campaigns, khata reminders, and cash reserve.')}
+            ${systemCard('04', 'Validation layer', 'Malformed JSON, impossible quantities, over-budget plans, and action/rationale mismatches are caught early.')}
+            ${systemCard('05', 'Simulation engine', 'Customers arrive with baskets, stock is fulfilled or missed, payments land, waste appears, and trust moves.')}
+            ${systemCard('06', 'Replay database', 'Runs, day results, decisions, provider responses, retries, fallbacks, and timelines are persisted in SQLite.')}
           </div>
         </section>
 
         <section class="about-section about-section--alt" id="world">
           <div class="about-section-head about-reveal">
-            <span>Fixed test world</span>
+            <span>Fair test world</span>
             <h2>${escapeHtml(SHOP_NAME)} · ${escapeHtml(profile.name)}</h2>
             <p>
-              Every model in ${PRODUCT_NAME} faces the same fictional neighborhood — ${profile.shopLocation.catchmentRadiusMeters}m catchment,
-              ${societies.length} societies, ${school?.population ?? 0} school students,
-              and ${profile.commuteFlow.dailyPassersby.toLocaleString('en-IN')} road passers per day.
+              Every model faces the same fictional Indian neighborhood: a ${profile.shopLocation.catchmentRadiusMeters}m catchment,
+              ${societies.length} nearby societies, ${school?.population ?? 0} school students,
+              and ${profile.commuteFlow.dailyPassersby.toLocaleString('en-IN')} daily road passers.
             </p>
           </div>
           <div class="about-world-stats about-reveal">
@@ -322,9 +327,9 @@ export class AboutPage {
 
         <section class="about-section" id="proof">
           <div class="about-section-head about-reveal">
-            <span>What we prove</span>
-            <h2>AI plans vs backend reality</h2>
-            <p>The model sees signals and constraints. The simulator tests whether the plan survives contact with customers.</p>
+            <span>Plan versus reality</span>
+            <h2>The model's plan is only half the story</h2>
+            <p>The interesting question is not what the AI says it will do. It is what happens after customers arrive.</p>
           </div>
           <div class="about-proof-grid about-reveal">
             <div class="about-proof-panel ai">
@@ -332,7 +337,7 @@ export class AboutPage {
               <ul>
                 <li>Day, cash, trust, and cumulative score</li>
                 <li>Inventory on shelf and in storage</li>
-                <li>Weather forecast and today's event window</li>
+                <li>Weather forecast and event context</li>
                 <li>Neighborhood places, segments, and demand signals</li>
                 <li>Active marketing, khata exposure, recent day history</li>
                 <li>Per-product service rates and waste risk</li>
@@ -341,12 +346,12 @@ export class AboutPage {
             <div class="about-proof-panel sim">
               <h3>What the backend tests</h3>
               <ul>
-                <li>Do customers actually visit and buy?</li>
+                <li>Who actually visits the shop?</li>
                 <li>Which requests are fulfilled, partial, or missed?</li>
                 <li>How much revenue, khata, and waste result?</li>
                 <li>Does trust rise or fall — and why?</li>
-                <li>How is the day scored across service, money, relationships?</li>
-                <li>Is every decision saved for replay and model comparison?</li>
+                <li>How does the day score across all reward buckets?</li>
+                <li>Can the run be replayed and audited later?</li>
               </ul>
             </div>
           </div>
@@ -354,21 +359,21 @@ export class AboutPage {
 
         <section class="about-section about-section--alt" id="metrics">
           <div class="about-section-head about-reveal">
-            <span>Good, bad, ugly</span>
-            <h2>What makes an AI shopkeeper win or lose?</h2>
+            <span>How to judge a run</span>
+            <h2>Good operators protect more than profit</h2>
             <p>
-              The score is not a single profit number. A model can make cash and still fail if it trains customers
-              to stop trusting the shop.
+              DukaanBench separates daily reward from final business health. A model can make money today
+              and still lose if it breaks customer trust or leaves tomorrow understocked.
             </p>
           </div>
           <div class="about-metric-board about-reveal">
-            ${metricCard(effectRewardUrl, 'Service', 'Good', 'Fulfill demand, especially essentials like milk, bread, eggs, and cold drinks during heat.')}
-            ${metricCard(effectCashUrl, 'Money', 'Good', 'Grow revenue and profit while keeping enough cash for tomorrow\'s correction order.')}
-            ${metricCard(effectWarningUrl, 'Inventory', 'Bad', 'Stockouts, missed demand, and overbuying perishables punish short-term thinking.')}
-            ${metricCard(effectTrustUrl, 'Relationships', 'Ugly', 'Repeated misses for regulars reduce future visits. Trust is the long-term moat.')}
-            ${metricCard(effectCustomersUrl, 'Marketing', 'Conditional', 'Campaigns score only when promoted demand can actually be served profitably.')}
-            ${metricCard(effectKhataUrl, 'Khata', 'Risk', 'Credit can protect loyalty, but unpaid balance weakens restocking power.')}
-            ${metricCard(effectWarningUrl, 'Penalties', 'Ugly', 'Invalid actions, over-budget plans, fallbacks, and brittle JSON hurt the benchmark record.')}
+            ${metricCard(effectRewardUrl, 'Service', 'Primary', 'Fulfill demand, especially essentials and weather-sensitive items during rush days.')}
+            ${metricCard(effectCashUrl, 'Money', 'Primary', 'Grow revenue and profit while keeping enough liquid cash for tomorrow.')}
+            ${metricCard(effectWarningUrl, 'Inventory', 'Discipline', 'Avoid stockouts, missed demand, dead cash, and perishable waste.')}
+            ${metricCard(effectTrustUrl, 'Relationships', 'Long-term', 'Repeated misses for regulars reduce future visits. Trust is the real moat.')}
+            ${metricCard(effectCustomersUrl, 'Marketing', 'Conditional', 'Campaigns score only when promoted demand is served profitably.')}
+            ${metricCard(effectKhataUrl, 'Khata', 'Risk', 'Credit can protect loyalty, but unpaid balances reduce restocking power.')}
+            ${metricCard(effectWarningUrl, 'Penalties', 'Reliability', 'Invalid JSON, impossible plans, fallbacks, and brittle reasoning hurt the run.')}
             ${metricCard(effectRewardUrl, 'Final health', 'Outcome', 'A strong run ends with profit, cash, trust, low waste, high service, and few stockouts.')}
           </div>
         </section>
@@ -376,10 +381,10 @@ export class AboutPage {
         <section class="about-theater-section" id="arena">
           <div class="about-section-head about-reveal">
             <span>${PRODUCT_NAME} Arena</span>
-            <h2>Watch the proof, don't just read the score</h2>
+            <h2>The benchmark is replayable</h2>
             <p>
-              The arena theatre replays saved backend results: customers walk in, items move along the counter,
-              thought bubbles show demand, and reward breakdowns come from real simulation output.
+              Scores are useful, but replays make model behavior legible. The Arena turns saved backend logs
+              into a watchable day: customers ask, shelves respond, trust changes, and reward moves.
             </p>
           </div>
           <div class="about-arena-showcase about-reveal">
@@ -392,10 +397,10 @@ export class AboutPage {
               </div>
             </div>
             <div class="about-arena-features">
-              ${feature(effectCustomersUrl, 'Live customer replay', 'Visits, demand bubbles, and handoffs animate from saved day logs — not invented UI.')}
-              ${feature(robotUrl, 'Model vs heuristic', 'Compare GPT, Gemini, DeepSeek, GLM, and a built-in baseline on the same 30-day world.')}
-              ${feature(effectRewardUrl, 'Reward breakdown', 'Service, inventory, money, relationships, marketing — scored by the real backend.')}
-              ${feature(effectTrustUrl, 'Trust & khata tracking', 'See how credit decisions and stockouts ripple through the neighborhood.')}
+              ${feature(effectCustomersUrl, 'Customer-by-customer playback', 'Demand bubbles, fulfilled items, misses, payments, and exits animate from saved day logs.')}
+              ${feature(robotUrl, 'Model comparison', 'Replay GPT, Gemini, DeepSeek, GLM, Claude, and local baselines on the same 30-day shop world.')}
+              ${feature(effectRewardUrl, 'Reward trace', 'Service, inventory, money, relationships, marketing, operations, and penalties come from the backend.')}
+              ${feature(effectTrustUrl, 'Trust memory', 'See how stockouts, khata, and regular-customer service compound over the month.')}
             </div>
           </div>
         </section>
@@ -403,17 +408,18 @@ export class AboutPage {
         <section class="about-cta about-reveal" id="cta">
           <h2>The goal is bigger than a game</h2>
           <p>
-            Kirana owners make dozens of hard calls every day with thin margins and incomplete information.
-            If AI can operate this shop well, it may one day help real shopkeepers read demand,
-            protect cash, and learn from yesterday's sales — not replace them.
+            For researchers, DukaanBench is an agent benchmark with compounding consequences.
+            For viewers, it is a readable business game. For kirana owners, it points toward
+            AI copilots that can read demand, protect cash, plan offers, and learn from yesterday's sales.
           </p>
           <div class="about-cta-actions">
-            <a class="about-btn about-btn-primary about-btn-lg" href="/arena-2">Watch AI Replay Theatre</a>
+            <a class="about-btn about-btn-primary about-btn-lg" href="/arena-2">Open AI Arena</a>
+            <a class="about-btn about-btn-warm about-btn-lg" href="/play">Try the human game</a>
           </div>
         </section>
 
         <footer class="about-footer">
-          ${PRODUCT_NAME} · Test shop ${SHOP_NAME} · OpenEnv-compatible · Backend-owned truth · SQLite replays
+          ${PRODUCT_NAME} · ${SHOP_NAME} · OpenEnv-shaped APIs · backend-owned truth · SQLite replays
         </footer>
       </div>
     `;
@@ -424,7 +430,7 @@ export class AboutPage {
     const progress = this.root.querySelector<HTMLElement>('#about-progress');
     const backTop = this.root.querySelector<HTMLButtonElement>('#about-back-top');
     const sectionLinks = this.root.querySelectorAll<HTMLAnchorElement>('.about-nav-sections a[data-section]');
-    const sections = ['leaderboard', 'challenge', 'how-it-works', 'world', 'proof', 'arena', 'cta']
+    const sections = ['leaderboard', 'challenge', 'how-it-works', 'system', 'world', 'proof', 'metrics', 'arena', 'cta']
       .map((id) => document.getElementById(id))
       .filter((el): el is HTMLElement => Boolean(el));
 
