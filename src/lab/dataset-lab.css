@@ -16,20 +16,29 @@
 html.lab-route,
 body.lab-route {
   margin: 0;
+  height: auto;
   min-height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
   background: var(--lab-cream);
   color: var(--lab-ink);
   font-family: Inter, system-ui, sans-serif;
 }
 
 #app.lab-route {
+  width: 100%;
   min-height: 100vh;
+  height: auto;
+  overflow: visible;
+  position: static;
 }
 
 .lab-root {
   max-width: 1440px;
   margin: 0 auto;
   padding: 24px 20px 64px;
+  min-height: 100vh;
+  overflow: visible;
 }
 
 .lab-top {
@@ -135,7 +144,7 @@ body.lab-route {
   background: var(--lab-paper);
   border: 1px solid var(--lab-border);
   border-radius: 16px;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .lab-panel-head {
