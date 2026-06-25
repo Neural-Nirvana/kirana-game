@@ -12,39 +12,30 @@ import {
   AUTO_ADVANCE_DELAY_MS,
   clamp,
   compareByFinalScore,
-  COMPLETE_REPLAY_DAYS,
   compactSentence,
   dayTone,
   DEFAULT_MODEL_PRESETS,
   escapeHtml,
   finalLiveMetrics,
   isHeuristicModel,
-  latestDecisionLatency,
   loadRecentReplays,
   dedupeReplaySummariesByModel,
   mergeModelPresets,
   modelLabel,
-  modelMatchesReplay,
   money,
-  neighborhoodBrief,
   openingLiveMetrics,
   pad,
-  POLL_INTERVAL_MS,
-  primaryRun,
   requestJson,
   saveRecentReplays,
   shortId,
   signed,
-  sortModelPresetsByScore,
   weatherIcon,
   type ArenaPlaybackMode,
-  type ArenaProfile,
 } from './arena-shared';
 import type {
   AiProviderResponseRecord,
   AiProviderResponsesResponse,
   AiReplayResponse,
-  ArenaJobResponse,
   ArenaLiveMetrics,
   ArenaModelPreset,
   ArenaModelsResponse,
@@ -52,31 +43,24 @@ import type {
   ArenaReplayIndexResponse,
   ArenaReplayRun,
   ArenaReplaySummary,
-  ArenaRunSummary,
   ArenaScoreboardResponse,
 } from './arena-types';
 
 type DetailTab = 'actions' | 'thoughts' | 'results' | 'rewards' | 'report' | 'audit';
-type SidebarSection = 'setup' | 'replays' | 'scoreboard';
+type SidebarSection = 'replays' | 'scoreboard';
 
 export class ArenaApp2 {
   private readonly root: HTMLElement;
   private stage?: ArenaStage;
   private run?: ArenaReplayRun;
-  private arenaJob?: ArenaJobResponse;
-  private pollTimer?: number;
   private activeDayIndex = 0;
   private speed = 5;
   private paused = false;
   private playing = false;
   private activeTab: DetailTab = 'actions';
-  private sidebarSection: SidebarSection = 'setup';
+  private sidebarSection: SidebarSection = 'replays';
   private playbackMode: ArenaPlaybackMode = 'manual';
   private liveMetrics?: ArenaLiveMetrics;
-  private selectedModel = 'heuristic-v2';
-  private customModel = '';
-  private profile: ArenaProfile = 'fast';
-  private maxDays = 30;
   private modelPresets: ArenaModelPreset[] = DEFAULT_MODEL_PRESETS;
   private recentReplays: ArenaReplaySummary[] = loadRecentReplays();
   private indexedReplays: ArenaReplaySummary[] = [];
@@ -168,7 +152,7 @@ export class ArenaApp2 {
     try {
       const response = await requestJson<ArenaReplayIndexResponse>('/api/arena/replays?status=complete&limit=40');
       this.indexedReplays = response.replays;
-      if (this.backendConnected && !this.arenaJob) {
+      if (this.backendConnected) {
         this.statusError = false;
         this.statusMessage = this.indexedReplays.length > 0
           ? `${this.featuredReplaySummaries().length} replay-ready models loaded.`
@@ -234,9 +218,6 @@ export class ArenaApp2 {
       if (!target) return;
       const action = target.dataset.a2Action;
       if (action === 'sidebar-section') this.setSidebarSection(target.dataset.section as SidebarSection);
-      if (action === 'select-model') this.selectModel(target.dataset.model ?? 'heuristic-v2');
-      if (action === 'profile') this.setProfile(target.dataset.profile === 'max' ? 'max' : 'fast');
-      if (action === 'start-live') void this.startLiveArena();
       if (action === 'replay-run') void this.loadStoredReplay(target.dataset.runId ?? '');
       if (action === 'clear-replays') this.clearRecentReplays();
       if (action === 'simulate') void this.playActiveDay();
@@ -250,25 +231,11 @@ export class ArenaApp2 {
       if (action === 'tab') this.setTab(target.dataset.tab as DetailTab);
       if (action === 'toggle-sidebar') this.toggleSidebar();
       if (action === 'intro-browse-replays') this.dismissIntro('replays');
-      if (action === 'intro-setup-live') this.dismissIntro('setup');
       if (action === 'intro-leaderboard') this.dismissIntro('scoreboard');
-      if (action === 'intro-quick-demo') this.dismissIntro('setup', { startQuick: true });
       if (action === 'retry-backend') {
         this.showIntroOverlay('loading');
         void this.bootstrap();
       }
-    });
-
-    this.root.addEventListener('input', (event) => {
-      const target = event.target;
-      if (!(target instanceof HTMLInputElement)) return;
-      if (target.id === 'a2-custom-model') this.customModel = target.value;
-      if (target.id === 'a2-max-days') {
-        this.maxDays = clamp(Number(target.value || 30), 1, 30);
-        target.value = String(this.maxDays);
-      }
-      this.renderSidebar();
-      this.renderHud();
     });
 
     window.addEventListener('keydown', (event) => {
@@ -326,163 +293,10 @@ export class ArenaApp2 {
     this.renderSidebar();
   }
 
-  private selectModel(model: string) {
-    this.selectedModel = model;
-    if (model !== 'custom') this.customModel = '';
-    const completedReplay = this.completedReplayForModel(this.resolvedModel);
-    this.statusError = false;
-    this.statusMessage = completedReplay
-      ? `${modelLabel(this.resolvedModel, this.modelPresets)} has a 30-day replay ready — load it instantly.`
-      : isHeuristicModel(this.resolvedModel)
-        ? 'Heuristic runs locally with zero API cost.'
-        : 'This model calls OpenRouter and streams days as they complete.';
-    this.renderSidebar();
-    this.renderTransport();
-    this.renderHud();
-  }
-
-  private setProfile(profile: ArenaProfile) {
-    this.profile = profile;
-    this.statusMessage = profile === 'max'
-      ? 'Max capability: stricter JSON, deeper reasoning, longer timeout.'
-      : 'Fast live: compact observations for quicker replays.';
-    this.renderSidebar();
-  }
-
-  private async startLiveArena() {
-    this.introActive = false;
-    const model = this.resolvedModel.trim();
-    if (!model) {
-      this.statusError = true;
-      this.statusMessage = 'Enter a custom OpenRouter model id or pick a preset.';
-      this.renderSidebar();
-      return;
-    }
-
-    this.stopPolling();
-    this.stage?.stopReplay();
-    this.playing = false;
-    this.paused = false;
-    this.liveMetrics = undefined;
-    this.run = undefined;
-    this.arenaJob = undefined;
-    this.autoPlayedDays.clear();
-    this.renderAll();
-    this.setStageOverlay(`Starting ${modelLabel(model, this.modelPresets)}…`);
-
-    try {
-      const job = await this.createArenaJob(model);
-      this.arenaJob = job;
-      this.statusError = false;
-      this.statusMessage = `Job ${shortId(job.arenaId)} running — waiting for Day 1.`;
-      this.renderSidebar();
-      this.renderTransport();
-      await this.pollArenaJob();
-    } catch (error) {
-      this.statusError = true;
-      this.statusMessage = error instanceof Error ? error.message : String(error);
-      this.renderSidebar();
-      this.setStageOverlay(this.statusMessage, true);
-    }
-  }
-
-  private async createArenaJob(model: string): Promise<ArenaJobResponse> {
-    if (isHeuristicModel(model)) {
-      return requestJson<ArenaJobResponse>('/api/arena/runs', {
-        method: 'POST',
-        body: JSON.stringify({ mode: 'heuristic', models: ['heuristic-v2'], maxDays: this.maxDays, profile: 'balanced' }),
-      });
-    }
-    if (this.profile === 'max') {
-      return requestJson<ArenaJobResponse>('/api/arena/max-capability-runs', {
-        method: 'POST',
-        body: JSON.stringify({ models: [model], maxDays: this.maxDays }),
-      });
-    }
-    return requestJson<ArenaJobResponse>('/api/arena/runs', {
-      method: 'POST',
-      body: JSON.stringify({
-        mode: 'llm',
-        models: [model],
-        maxDays: this.maxDays,
-        profile: 'balanced',
-        observationMode: 'compact',
-        responseMode: 'json_schema',
-        reasoning: 'off',
-        temperature: 0.15,
-        requireJsonSchema: false,
-        requireParameters: true,
-        timeoutMs: 90000,
-        maxTokens: 1800,
-      }),
-    });
-  }
-
-  private async pollArenaJob() {
-    if (!this.arenaJob) return;
-    this.stopPolling();
-    try {
-      const job = await requestJson<ArenaJobResponse>(`/api/arena/runs/${encodeURIComponent(this.arenaJob.arenaId)}`);
-      this.arenaJob = job;
-      this.renderSidebar();
-      this.renderTransport();
-      await this.refreshReplayFromJob(job);
-
-      if (job.status === 'running' || job.status === 'queued') {
-        this.pollTimer = window.setTimeout(() => void this.pollArenaJob(), POLL_INTERVAL_MS);
-      } else if (job.status === 'failed') {
-        this.statusError = true;
-        this.statusMessage = job.error ?? primaryRun(job)?.error ?? 'Arena job failed.';
-        this.renderSidebar();
-        if (!this.run) this.setStageOverlay(this.statusMessage, true);
-      } else {
-        this.statusError = false;
-        this.statusMessage = 'Run complete — all decisions saved to SQLite.';
-        this.renderSidebar();
-        if (!this.playing && this.run) this.clearStageOverlay();
-      }
-    } catch (error) {
-      this.statusError = true;
-      this.statusMessage = error instanceof Error ? error.message : String(error);
-      this.renderSidebar();
-      this.pollTimer = window.setTimeout(() => void this.pollArenaJob(), POLL_INTERVAL_MS * 2);
-    }
-  }
-
-  private async refreshReplayFromJob(job: ArenaJobResponse) {
-    const run = primaryRun(job);
-    if (!run?.runId) {
-      this.setStageOverlay(`${modelLabel(run?.model ?? this.resolvedModel, this.modelPresets)} preparing Day ${run?.day ?? 1}…`);
-      return;
-    }
-
-    const replay = await requestJson<AiReplayResponse>(`/api/ai-runs/${encodeURIComponent(run.runId)}`);
-    const previousDays = this.run?.runId === run.runId ? this.run.days.length : 0;
-    this.applyReplayResponse(replay, job.maxDays);
-    this.rememberReplay(run);
-
-    const hasNewDay = this.run && this.run.days.length > previousDays;
-    if (hasNewDay) {
-      this.statusError = false;
-      this.statusMessage = this.playbackMode === 'auto'
-        ? `Day ${this.run?.days.length ?? 0} ready — auto-playing.`
-        : `Day ${this.run?.days.length ?? 0} ready — press Play when ready.`;
-      this.renderSidebar();
-      this.renderTransport();
-      if (this.playbackMode === 'auto') void this.playNextUnplayedDay();
-      else this.renderAll();
-    } else if (job.status === 'running') {
-      const nextDay = Math.min((this.run?.days.length ?? 0) + 1, job.maxDays);
-      this.setStageOverlay(`${modelLabel(run.model, this.modelPresets)} thinking through Day ${nextDay}…`);
-    }
-  }
-
   private async loadStoredReplay(runId: string) {
     if (!runId) return;
     this.introActive = false;
-    this.stopPolling();
     this.stage?.stopReplay();
-    this.arenaJob = undefined;
     this.playing = false;
     this.paused = false;
     this.autoPlayedDays.clear();
@@ -492,7 +306,6 @@ export class ArenaApp2 {
       const replay = await requestJson<AiReplayResponse>(`/api/ai-runs/${encodeURIComponent(runId)}`);
       this.applyReplayResponse(replay);
       if (!this.run || this.run.days.length === 0) throw new Error('Saved run has no completed days yet.');
-      this.selectModelFromReplay(this.run.days[0]?.model);
       this.statusError = false;
       this.statusMessage = `Loaded ${modelLabel(this.run.days[0].model, this.modelPresets)} — ${this.run.days.length} days ready. Press Play Day 01 to watch.`;
       this.sidebarSection = 'replays';
@@ -526,22 +339,6 @@ export class ArenaApp2 {
     }
   }
 
-  private rememberReplay(run: ArenaRunSummary) {
-    if (!run.runId) return;
-    const replay: ArenaReplaySummary = {
-      runId: run.runId,
-      model: run.model,
-      status: run.status,
-      daysCompleted: run.decisions.length,
-      score: run.totalReward,
-      finalCash: run.finalCash,
-      finalTrust: run.finalTrust,
-      savedAt: new Date().toISOString(),
-    };
-    this.recentReplays = [replay, ...this.recentReplays.filter((c) => c.runId !== replay.runId)].slice(0, 6);
-    saveRecentReplays(this.recentReplays);
-  }
-
   private clearRecentReplays() {
     this.recentReplays = [];
     saveRecentReplays(this.recentReplays);
@@ -561,27 +358,6 @@ export class ArenaApp2 {
     return dedupeReplaySummariesByModel(this.allReplaySummaries());
   }
 
-  private rankedModelPresets() {
-    return sortModelPresetsByScore(this.modelPresets, this.featuredReplaySummaries());
-  }
-
-  private completedReplayForModel(model: string) {
-    return this.featuredReplaySummaries().find(
-      (r) => modelMatchesReplay(model, r.model) && r.status === 'complete' && r.daysCompleted >= COMPLETE_REPLAY_DAYS
-    );
-  }
-
-  private selectModelFromReplay(model: string | undefined) {
-    if (!model) return;
-    if (this.modelPresets.some((p) => p.id === model)) {
-      this.selectedModel = model;
-      this.customModel = '';
-    } else {
-      this.selectedModel = 'custom';
-      this.customModel = model;
-    }
-  }
-
   private renderAll() {
     this.renderTheaterChrome();
     this.renderHud(this.run?.days[this.activeDayIndex]);
@@ -593,9 +369,7 @@ export class ArenaApp2 {
 
   private renderTheaterChrome() {
     const day = this.run?.days[this.activeDayIndex];
-    const run = this.arenaJob ? primaryRun(this.arenaJob) : undefined;
-    const displayModel = day?.model ?? run?.model ?? this.resolvedModel;
-    const isLive = this.arenaJob?.status === 'running' || this.arenaJob?.status === 'queued';
+    const displayModel = day?.model ?? this.run?.days[0]?.model ?? 'Pick a replay';
     const episodeProgress = this.run
       ? Math.round(((this.activeDayIndex + 1) / this.run.days.length) * 100)
       : 0;
@@ -627,14 +401,14 @@ export class ArenaApp2 {
         ` : `
           <div class="a2-meta-chip">
             <span>Model</span>
-            <strong>${escapeHtml(modelLabel(displayModel, this.modelPresets))}</strong>
+            <strong>${escapeHtml(this.run ? modelLabel(displayModel, this.modelPresets) : displayModel)}</strong>
           </div>
           <div class="a2-meta-chip">
             <span>Episode</span>
-            <strong>${this.run?.days.length ?? run?.decisions.length ?? 0} / ${this.arenaJob?.maxDays ?? this.maxDays} days</strong>
+            <strong>${this.run ? `${this.run.days.length} / ${this.run.days[0]?.maxDays ?? this.run.days.length} days` : '—'}</strong>
           </div>
         `}
-        ${this.playing ? '<div class="a2-live-badge"><em></em> Replaying</div>' : isLive ? '<div class="a2-live-badge thinking"><em></em> AI Thinking</div>' : ''}
+        ${this.playing ? '<div class="a2-live-badge"><em></em> Replaying</div>' : ''}
       </div>
     `;
 
@@ -668,14 +442,14 @@ export class ArenaApp2 {
       <div class="a2-status-strip idle">
         <div class="a2-status-item wide">
           <span>Welcome</span>
-          <strong>Read the stage intro, then pick how you want to explore ${PRODUCT_NAME}.</strong>
+          <strong>Pick a saved replay from the sidebar to start watching.</strong>
         </div>
       </div>
     ` : `
       <div class="a2-status-strip idle">
         <div class="a2-status-item wide">
           <span>Stage</span>
-          <strong>${isLive ? 'Waiting for first completed day from backend…' : 'Load a replay or start a live run to animate the shop floor.'}</strong>
+          <strong>Pick a saved replay from the sidebar to animate the shop floor.</strong>
         </div>
       </div>
     `;
@@ -770,9 +544,7 @@ export class ArenaApp2 {
 
   private renderHud(day?: ArenaReplayDay) {
     const live = this.liveMetricsFor(day);
-    const run = this.arenaJob ? primaryRun(this.arenaJob) : undefined;
-    const displayModel = day?.model ?? run?.model ?? this.resolvedModel;
-    const isLive = this.arenaJob?.status === 'running' || this.arenaJob?.status === 'queued';
+    const displayModel = day?.model ?? this.run?.days[0]?.model;
     const backendLabel = this.backendConnected
       ? 'Backend connected'
       : this.backendChecked
@@ -801,10 +573,9 @@ export class ArenaApp2 {
           metricPill('Weather', day.weather, weatherIcon(day.weather)),
           metricPill('Event', compactSentence(day.eventLabel, 18)),
         ].join('') : [
-          metricPill('Model', modelLabel(displayModel, this.modelPresets)),
-          metricPill('Days', `${this.run?.days.length ?? run?.decisions.length ?? 0}/${this.arenaJob?.maxDays ?? this.maxDays}`),
-          metricPill('Status', isLive ? 'Thinking…' : this.arenaJob?.status ?? 'Ready', '', isLive ? 'live' : ''),
-          metricPill('Replays', `${this.allReplaySummaries().length}`, 'saved'),
+          metricPill('Replays', `${this.featuredReplaySummaries().length}`, 'models ready'),
+          metricPill('Leaderboard', `${this.scoreboardRows.length}`, 'ranked'),
+          metricPill('Status', this.run ? 'Replay loaded' : 'Pick a replay', this.run ? `${this.run.days.length} days` : 'from sidebar'),
         ].join('')}
       </div>
       <div class="a2-topbar-status">
@@ -812,30 +583,22 @@ export class ArenaApp2 {
         <span class="a2-backend-label">${backendLabel}</span>
       </div>
       <div class="a2-model-badge">
-        <span>${escapeHtml(modelLabel(displayModel, this.modelPresets))}</span>
-        ${isLive ? '<em class="a2-pulse">● live</em>' : ''}
+        <span>${escapeHtml(displayModel ? modelLabel(displayModel, this.modelPresets) : 'Replay theatre')}</span>
       </div>
     `;
   }
 
   private renderSidebar() {
-    const model = this.resolvedModel;
-    const benchmarkReplay = this.completedReplayForModel(model);
     const replays = this.featuredReplaySummaries();
-    const rankedPresets = this.rankedModelPresets();
     const totalReplayRuns = this.allReplaySummaries().length;
-    const run = this.arenaJob ? primaryRun(this.arenaJob) : undefined;
-    const completedDays = this.run?.days.length ?? run?.decisions.length ?? 0;
-    const maxDaysDisplay = this.arenaJob?.maxDays ?? this.maxDays;
 
     this.requireElement('a2-sidebar').innerHTML = `
       <nav class="a2-sidebar-nav">
-        ${sidebarNavBtn('setup', 'Setup', this.sidebarSection)}
         ${sidebarNavBtn('replays', 'Replays', this.sidebarSection, replays.length)}
         ${sidebarNavBtn('scoreboard', 'Leaderboard', this.sidebarSection)}
       </nav>
       <div class="a2-sidebar-content">
-        ${this.sidebarSection === 'setup' ? `
+        ${this.sidebarSection === 'replays' ? `
           <div class="a2-sidebar-hero">
             <img src="${sidebarHeroUrl}" alt="" />
             <div class="a2-sidebar-hero-copy">
@@ -844,78 +607,14 @@ export class ArenaApp2 {
             </div>
           </div>
           <div class="a2-panel">
-            <h2>Run Setup</h2>
-            <p class="a2-hint">One JSON plan per day. Backend simulates customers and scores results.</p>
-            <div class="a2-model-list">
-              ${rankedPresets.map((preset) => {
-                const benchmark = this.completedReplayForModel(preset.id);
-                const hasReplay = Boolean(benchmark);
-                return `
-                  <button
-                    class="a2-model-btn ${model === preset.id ? 'active' : ''} ${hasReplay ? 'has-replay' : ''}"
-                    data-a2-action="select-model"
-                    data-model="${escapeHtml(preset.id)}"
-                    type="button"
-                  >
-                    <strong>${escapeHtml(preset.label)}</strong>
-                    <span>${escapeHtml(compactSentence(preset.note, 48))}</span>
-                    ${hasReplay ? `<em>30-day replay · ${signed(benchmark!.score)}</em>` : ''}
-                  </button>
-                `;
-              }).join('')}
-              <button class="a2-model-btn ${this.selectedModel === 'custom' ? 'active' : ''}" data-a2-action="select-model" data-model="custom" type="button">
-                <strong>Custom model</strong>
-                <span>Paste OpenRouter id</span>
-              </button>
-            </div>
-            ${this.selectedModel === 'custom' ? `
-              <label class="a2-field">
-                Model id
-                <input id="a2-custom-model" value="${escapeHtml(this.customModel)}" placeholder="provider/model-id" />
-              </label>
-            ` : ''}
-            <label class="a2-field">
-              Episode length
-              <input id="a2-max-days" type="number" min="1" max="30" value="${this.maxDays}" />
-            </label>
-            <div class="a2-profile-pills">
-              <button class="${this.profile === 'fast' ? 'active' : ''}" data-a2-action="profile" data-profile="fast" type="button">Fast live</button>
-              <button class="${this.profile === 'max' ? 'active' : ''}" data-a2-action="profile" data-profile="max" type="button">Max capability</button>
-            </div>
-            <div class="a2-cta-group">
-              <button class="a2-cta-primary" data-a2-action="start-live" type="button" ${this.playing ? 'disabled' : ''}>
-                Start Live Run
-              </button>
-              ${benchmarkReplay ? `
-                <button class="a2-cta-secondary" data-a2-action="replay-run" data-run-id="${escapeHtml(benchmarkReplay.runId)}" type="button" ${this.playing ? 'disabled' : ''}>
-                  Replay 30 Days
-                </button>
-              ` : ''}
-            </div>
-          </div>
-          <div class="a2-status-card ${this.statusError ? 'error' : ''}">
-            <span>${this.arenaJob?.status ?? (this.backendConnected ? 'ready' : this.backendChecked ? 'offline' : 'connecting')}</span>
-            <p>${escapeHtml(this.statusMessage)}</p>
-            ${this.backendChecked && !this.backendConnected ? '<button class="a2-retry-btn" data-a2-action="retry-backend" type="button">Retry connection</button>' : ''}
-            ${this.arenaJob ? `
-              <div class="a2-progress-bar">
-                <div class="a2-progress-fill" style="width:${Math.round((completedDays / maxDaysDisplay) * 100)}%"></div>
-              </div>
-              <small>${completedDays}/${maxDaysDisplay} days${latestDecisionLatency(run) ? ` · ${Math.round(latestDecisionLatency(run) / 1000)}s latency` : ''}</small>
-            ` : ''}
-          </div>
-          ${neighborhoodBrief('a2-neighborhood')}
-        ` : ''}
-        ${this.sidebarSection === 'replays' ? `
-          <div class="a2-panel">
             <div class="a2-panel-head">
               <h2>Saved Replays</h2>
               ${this.recentReplays.length > 0 ? '<button data-a2-action="clear-replays" type="button">Clear local</button>' : ''}
             </div>
             <p class="a2-hint">${totalReplayRuns > replays.length
               ? `Best run per model · ${totalReplayRuns} saved replays on record`
-              : 'Best completed run per model'}</p>
-            ${replays.length === 0 ? '<p class="a2-empty">No completed replays yet. Start a live run first.</p>' : `
+              : 'Best completed run per model — click to load'}</p>
+            ${replays.length === 0 ? '<p class="a2-empty">No completed replays yet.</p>' : `
               <div class="a2-replay-list">
                 ${replays.map((replay) => `
                   <button
@@ -933,6 +632,11 @@ export class ArenaApp2 {
                 `).join('')}
               </div>
             `}
+          </div>
+          <div class="a2-status-card ${this.statusError ? 'error' : ''}">
+            <span>${this.backendConnected ? 'ready' : this.backendChecked ? 'offline' : 'connecting'}</span>
+            <p>${escapeHtml(this.statusMessage)}</p>
+            ${this.backendChecked && !this.backendConnected ? '<button class="a2-retry-btn" data-a2-action="retry-backend" type="button">Retry connection</button>' : ''}
           </div>
         ` : ''}
         ${this.sidebarSection === 'scoreboard' ? `
@@ -985,20 +689,19 @@ export class ArenaApp2 {
     const dayPlayed = day ? this.autoPlayedDays.has(day.day) : false;
     const hasNext = Boolean(this.run && this.activeDayIndex + 1 < this.run.days.length);
     const hasPrev = this.activeDayIndex > 0;
-    const waiting = !day && (this.arenaJob?.status === 'queued' || this.arenaJob?.status === 'running');
 
     this.requireElement('a2-transport').innerHTML = `
       <div class="a2-transport-label">
         <span>Playback</span>
-        <strong>${day ? `Day ${pad(day.day)}` : waiting ? 'Standby' : 'Ready'}</strong>
+        <strong>${day ? `Day ${pad(day.day)}` : 'Pick a replay'}</strong>
       </div>
       <div class="a2-transport-main">
         <button class="a2-transport-btn" data-a2-action="prev-day" type="button" ${!hasPrev || this.playing ? 'disabled' : ''} title="Previous day (←)" aria-label="Previous day">◀</button>
-        <button class="a2-transport-primary ${day && !this.playing ? 'ready' : ''}" data-a2-action="${day ? (this.playing ? 'pause' : 'simulate') : 'start-live'}" type="button" ${!day && (this.playing || waiting) ? 'disabled' : ''}>
-          <span class="a2-transport-primary-icon">${day ? (this.playing ? (this.paused ? '▶' : '⏸') : '▶') : waiting ? '⏳' : '▶'}</span>
+        <button class="a2-transport-primary ${day && !this.playing ? 'ready' : ''}" data-a2-action="${day ? (this.playing ? 'pause' : 'simulate') : ''}" type="button" ${!day ? 'disabled' : ''}>
+          <span class="a2-transport-primary-icon">${day ? (this.playing ? (this.paused ? '▶' : '⏸') : '▶') : '▶'}</span>
           <span class="a2-transport-primary-text">
-            <strong>${day ? (this.playing ? (this.paused ? 'Resume' : 'Pause') : dayPlayed ? 'Replay Day' : 'Play Day') : waiting ? 'AI Thinking' : 'Start Run'}</strong>
-            <em>${day ? pad(day.day) : waiting ? 'backend simulating' : 'selected model'}</em>
+            <strong>${day ? (this.playing ? (this.paused ? 'Resume' : 'Pause') : dayPlayed ? 'Replay Day' : 'Play Day') : 'Load a replay'}</strong>
+            <em>${day ? pad(day.day) : 'from the sidebar'}</em>
           </span>
         </button>
         <button class="a2-transport-btn" data-a2-action="next-day" type="button" ${!hasNext || this.playing ? 'disabled' : ''} title="Next day (→)" aria-label="Next day">▶</button>
@@ -1031,7 +734,7 @@ export class ArenaApp2 {
       this.requireElement('a2-timeline').innerHTML = `
         <div class="a2-timeline-empty">
           <span>Day timeline</span>
-          <p>Completed days appear here as the AI plays through the episode.</p>
+          <p>Load a replay to see completed days here.</p>
         </div>
       `;
       return;
@@ -1229,7 +932,7 @@ export class ArenaApp2 {
         </div>
         ${!isError && !isLoading ? `
           <ol class="a2-intro-steps">
-            <li class="a2-intro-step"><strong>1</strong><span><em>Pick a path</em> — browse a saved replay, set up a live model run, or open the leaderboard.</span></li>
+            <li class="a2-intro-step"><strong>1</strong><span><em>Pick a replay</em> — browse saved runs or open the leaderboard.</span></li>
             <li class="a2-intro-step"><strong>2</strong><span><em>Load a day</em> — press Play on Day 01 to animate customers on the counter.</span></li>
             <li class="a2-intro-step"><strong>3</strong><span><em>Read the proof</em> — Plan, Mind, Stats, Score, and Log panels explain each decision.</span></li>
           </ol>
@@ -1244,13 +947,9 @@ export class ArenaApp2 {
                 Browse ${replayCount} Saved Replays
               </button>
             ` : ''}
-            <button class="${replayCount > 0 ? 'a2-cta-secondary' : 'a2-cta-primary a2-intro-primary'}" data-a2-action="intro-setup-live" type="button">
-              Set Up a Live Model Run
+            <button class="${replayCount > 0 ? 'a2-cta-secondary a2-intro-primary' : 'a2-cta-primary a2-intro-primary'}" data-a2-action="intro-leaderboard" type="button">
+              View Leaderboard
             </button>
-            <button class="a2-intro-btn" data-a2-action="intro-leaderboard" type="button">View Leaderboard</button>
-            <button class="a2-intro-btn" data-a2-action="intro-quick-demo" type="button">Quick Heuristic Demo</button>
-            <a class="a2-intro-link" href="/lab">Dataset Lab →</a>
-            <a class="a2-intro-link subtle" href="/play">Play the human game →</a>
             <a class="a2-intro-link subtle" href="/about">What is ${PRODUCT_NAME}? →</a>
           </div>
         ` : ''}
@@ -1271,7 +970,7 @@ export class ArenaApp2 {
     this.renderTheaterChrome();
   }
 
-  private dismissIntro(section: SidebarSection, options?: { startQuick?: boolean }) {
+  private dismissIntro(section: SidebarSection) {
     this.introActive = false;
     this.sidebarSection = section;
     this.requireElement('a2-overlay').classList.remove('is-intro');
@@ -1279,18 +978,11 @@ export class ArenaApp2 {
     this.statusError = false;
     this.statusMessage = section === 'replays'
       ? `${this.allReplaySummaries().length} saved replays — click one, then press Play Day.`
-      : section === 'scoreboard'
-        ? 'Compare completed 30-day runs — click a row to load a replay.'
-        : 'Pick a model and episode length in the sidebar, then press Start Live Run.';
+      : 'Compare completed 30-day runs — click a row to load a replay.';
     this.renderSidebar();
     this.renderTheaterChrome();
     this.renderHud();
     this.renderTransport();
-
-    if (options?.startQuick) {
-      this.selectModel('heuristic-v2');
-      void this.startLiveArena();
-    }
   }
 
   private setStageOverlay(message: string, isError = false) {
@@ -1314,15 +1006,6 @@ export class ArenaApp2 {
     const overlay = this.requireElement('a2-overlay');
     overlay.hidden = true;
     overlay.classList.remove('is-intro', 'error');
-  }
-
-  private stopPolling() {
-    if (this.pollTimer) window.clearTimeout(this.pollTimer);
-    this.pollTimer = undefined;
-  }
-
-  private get resolvedModel() {
-    return this.selectedModel === 'custom' ? this.customModel.trim() : this.selectedModel;
   }
 
   private get activeDay() {
