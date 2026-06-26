@@ -341,8 +341,8 @@ app.post(appRoute('/api/llm-day-context'), async (request, reply) => {
 
 const base = appBasePath();
 if (base) {
-  app.get('/', async (_request, reply) => reply.redirect(302, `${base}/`));
-  app.get(base, async (_request, reply) => reply.redirect(302, `${base}/`));
+  app.get('/', async (_request, reply) => reply.redirect(`${base}/`));
+  app.get(base, async (_request, reply) => reply.redirect(`${base}/`));
 }
 
 if (process.env.KIRANA_SERVE_STATIC !== 'false' && existsSync(staticRoot)) {
