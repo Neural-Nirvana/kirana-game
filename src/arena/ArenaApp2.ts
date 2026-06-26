@@ -9,6 +9,17 @@ import { filterOfficialBenchmarkRows } from './benchmark-roster';
 import { initProviderLogoFallbacks, renderBenchmarkModelCell } from './provider-brand';
 import { ArenaStage } from './ArenaStage';
 import {
+  closedMobilePanels,
+  computeMobileLayoutClasses,
+  isMobileCinemaViewport,
+  isMobileWatchViewport,
+  nextStateOnToggleDetail,
+  nextStateOnToggleSidebar,
+  openReplayDrawerState,
+  panelsForCinemaEntry,
+  type MobilePanelState,
+} from './arena-mobile-layout';
+import {
   actionIcon,
   AUTO_ADVANCE_DELAY_MS,
   clamp,
@@ -71,6 +82,7 @@ export class ArenaApp2 {
   private statusError = false;
   private sidebarCollapsed = false;
   private detailPanelOpen = false;
+  private fullscreenActive = false;
   private backendConnected = false;
   private backendChecked = false;
   private introActive = true;
@@ -93,6 +105,7 @@ export class ArenaApp2 {
     }
     this.syncLayoutClasses();
     window.addEventListener('resize', () => this.handleResize());
+    document.addEventListener('fullscreenchange', () => this.handleFullscreenChange());
     this.stage = new ArenaStage(this.requireElement('a2-stage'), (metrics) => this.updateLiveMetrics(metrics));
     this.stage.mount(undefined);
     this.renderAll();
@@ -101,50 +114,82 @@ export class ArenaApp2 {
   }
 
   private isMobileWatch() {
-    return window.matchMedia('(max-width: 768px)').matches;
+    return isMobileWatchViewport(window.innerWidth, window.innerHeight);
+  }
+
+  private isMobileCinema() {
+    return isMobileCinemaViewport(window.innerWidth, window.innerHeight);
+  }
+
+  private mobilePanelState(): MobilePanelState {
+    return { sidebarCollapsed: this.sidebarCollapsed, detailPanelOpen: this.detailPanelOpen };
+  }
+
+  private applyMobilePanelState(state: MobilePanelState) {
+    this.sidebarCollapsed = state.sidebarCollapsed;
+    this.detailPanelOpen = state.detailPanelOpen;
   }
 
   private handleResize() {
     const mobile = this.isMobileWatch();
     const wasMobile = this.root.querySelector('.a2-root')?.classList.contains('a2-mobile-watch') ?? false;
     if (mobile && !wasMobile) {
-      this.sidebarCollapsed = true;
-      this.detailPanelOpen = false;
+      this.applyMobilePanelState(closedMobilePanels());
     } else if (!mobile) {
       this.detailPanelOpen = false;
     }
+    if (mobile && this.isMobileCinema()) {
+      this.applyMobilePanelState(panelsForCinemaEntry(this.mobilePanelState()));
+    }
     this.syncLayoutClasses();
+    this.refreshStageLayout();
     this.renderHud(this.run?.days[this.activeDayIndex]);
     this.renderTransport();
   }
 
+  private handleFullscreenChange() {
+    const theater = this.requireElement('a2-theater');
+    this.fullscreenActive = document.fullscreenElement === theater;
+    if (this.fullscreenActive && this.isMobileWatch()) {
+      this.applyMobilePanelState(closedMobilePanels());
+    }
+    this.syncLayoutClasses();
+    this.refreshStageLayout();
+    this.renderHud(this.run?.days[this.activeDayIndex]);
+    this.renderTransport();
+  }
+
+  private refreshStageLayout() {
+    window.requestAnimationFrame(() => this.stage?.refreshScale());
+  }
+
   private syncLayoutClasses() {
-    const mobile = this.isMobileWatch();
     const root = this.root.querySelector('.a2-root');
     const body = this.root.querySelector('.a2-body');
     const scrim = this.root.querySelector('#a2-scrim');
     if (!root || !body) return;
 
-    root.classList.toggle('a2-mobile-watch', mobile);
+    const layout = computeMobileLayoutClasses({
+      viewportWidth: window.innerWidth,
+      viewportHeight: window.innerHeight,
+      panels: this.mobilePanelState(),
+      fullscreen: this.fullscreenActive,
+      desktopSidebarCollapsed: this.sidebarCollapsed,
+    });
 
-    if (mobile) {
-      body.classList.remove('sidebar-collapsed');
-      body.classList.toggle('sidebar-open', !this.sidebarCollapsed);
-      body.classList.toggle('detail-open', this.detailPanelOpen);
-      const panelsOpen = !this.sidebarCollapsed || this.detailPanelOpen;
-      body.classList.toggle('panels-open', panelsOpen);
-      scrim?.classList.toggle('visible', panelsOpen);
-    } else {
-      body.classList.remove('sidebar-open', 'detail-open', 'panels-open');
-      body.classList.toggle('sidebar-collapsed', this.sidebarCollapsed);
-      scrim?.classList.remove('visible');
-    }
+    root.classList.remove('a2-mobile-watch', 'a2-mobile-cinema', 'a2-fullscreen-active');
+    layout.root.forEach((className) => root.classList.add(className));
+
+    body.classList.remove('sidebar-collapsed', 'sidebar-open', 'detail-open', 'panels-open');
+    layout.body.forEach((className) => body.classList.add(className));
+
+    scrim?.classList.toggle('visible', layout.scrimVisible);
+    scrim?.setAttribute('aria-hidden', layout.scrimVisible ? 'false' : 'true');
   }
 
   private openReplayDrawer() {
     if (!this.isMobileWatch()) return;
-    this.sidebarCollapsed = false;
-    this.detailPanelOpen = false;
+    this.applyMobilePanelState(openReplayDrawerState());
     this.sidebarSection = 'replays';
     this.syncLayoutClasses();
     this.renderSidebar();
@@ -153,18 +198,30 @@ export class ArenaApp2 {
 
   private toggleDetailPanel() {
     if (!this.isMobileWatch()) return;
-    this.detailPanelOpen = !this.detailPanelOpen;
-    if (this.detailPanelOpen) this.sidebarCollapsed = true;
+    this.applyMobilePanelState(nextStateOnToggleDetail(this.mobilePanelState()));
     this.syncLayoutClasses();
     this.renderHud(this.run?.days[this.activeDayIndex]);
   }
 
   private closeMobilePanels() {
     if (!this.isMobileWatch()) return;
-    this.sidebarCollapsed = true;
-    this.detailPanelOpen = false;
+    this.applyMobilePanelState(closedMobilePanels());
     this.syncLayoutClasses();
     this.renderHud(this.run?.days[this.activeDayIndex]);
+  }
+
+  private async toggleFullscreen() {
+    const theater = this.requireElement('a2-theater');
+    try {
+      if (document.fullscreenElement === theater) {
+        await document.exitFullscreen();
+      } else {
+        await theater.requestFullscreen();
+      }
+    } catch {
+      this.statusMessage = 'Fullscreen is not available in this browser.';
+      this.renderSidebar();
+    }
   }
 
   private async bootstrap() {
@@ -307,8 +364,10 @@ export class ArenaApp2 {
       if (action === 'tab') this.setTab(target.dataset.tab as DetailTab);
       if (action === 'toggle-sidebar') this.toggleSidebar();
       if (action === 'toggle-detail') this.toggleDetailPanel();
+      if (action === 'close-detail') this.closeMobilePanels();
       if (action === 'close-panels') this.closeMobilePanels();
       if (action === 'open-replays') this.openReplayDrawer();
+      if (action === 'toggle-fullscreen') void this.toggleFullscreen();
       if (action === 'intro-browse-replays') this.dismissIntro('replays');
       if (action === 'intro-leaderboard') this.dismissIntro('scoreboard');
       if (action === 'retry-backend') {
@@ -367,8 +426,11 @@ export class ArenaApp2 {
   }
 
   private toggleSidebar() {
-    this.sidebarCollapsed = !this.sidebarCollapsed;
-    if (this.isMobileWatch() && !this.sidebarCollapsed) this.detailPanelOpen = false;
+    if (this.isMobileWatch()) {
+      this.applyMobilePanelState(nextStateOnToggleSidebar(this.mobilePanelState()));
+    } else {
+      this.sidebarCollapsed = !this.sidebarCollapsed;
+    }
     this.syncLayoutClasses();
     this.renderSidebar();
     this.renderHud(this.run?.days[this.activeDayIndex]);
@@ -392,8 +454,7 @@ export class ArenaApp2 {
       this.sidebarSection = 'replays';
       this.clearStageOverlay();
       if (this.isMobileWatch()) {
-        this.sidebarCollapsed = true;
-        this.detailPanelOpen = false;
+        this.applyMobilePanelState(closedMobilePanels());
         this.syncLayoutClasses();
         this.renderAll();
         void this.playActiveDay();
@@ -456,6 +517,7 @@ export class ArenaApp2 {
     this.renderTransport();
     this.renderTimeline();
     this.renderDetail(this.run?.days[this.activeDayIndex]);
+    this.refreshStageLayout();
   }
 
   private renderTheaterChrome() {
@@ -648,6 +710,7 @@ export class ArenaApp2 {
         : 'pending';
 
     if (this.isMobileWatch()) {
+      const cinema = this.isMobileCinema() || this.fullscreenActive;
       const dayLabel = day
         ? `Day ${pad(day.day)} / ${pad(day.maxDays)}`
         : this.run
@@ -655,7 +718,20 @@ export class ArenaApp2 {
           : 'Pick a replay';
       const modelName = displayModel ? modelLabel(displayModel, this.modelPresets) : PRODUCT_NAME;
 
-      this.requireElement('a2-topbar').innerHTML = `
+      this.requireElement('a2-topbar').innerHTML = cinema ? `
+        <div class="a2-mobile-bar-center a2-mobile-bar-cinema">
+          <strong>${escapeHtml(dayLabel)}</strong>
+          <span>${escapeHtml(modelName)}</span>
+        </div>
+        <button
+          class="a2-mobile-bar-btn a2-mobile-bar-ghost"
+          data-a2-action="toggle-fullscreen"
+          type="button"
+          aria-label="${this.fullscreenActive ? 'Exit fullscreen' : 'Enter fullscreen'}"
+        >
+          <span>${this.fullscreenActive ? '⤢' : '⛶'}</span>
+        </button>
+      ` : `
         <button class="a2-mobile-bar-btn" data-a2-action="toggle-sidebar" type="button" aria-label="Browse replays">
           <span class="a2-mobile-bar-icon">☰</span>
           <span>Replays</span>
@@ -832,6 +908,15 @@ export class ArenaApp2 {
         </button>
         <button class="a2-transport-btn" data-a2-action="next-day" type="button" ${!hasNext || this.playing ? 'disabled' : ''} title="Next day (→)" aria-label="Next day">▶</button>
         ${day ? `<button class="a2-transport-secondary" data-a2-action="replay" type="button" ${this.playing ? 'disabled' : ''} title="Replay current day">↺</button>` : ''}
+        ${mobile ? `
+          <button
+            class="a2-transport-fullscreen ${this.fullscreenActive ? 'active' : ''}"
+            data-a2-action="toggle-fullscreen"
+            type="button"
+            aria-label="${this.fullscreenActive ? 'Exit fullscreen' : 'Enter fullscreen'}"
+            title="${this.fullscreenActive ? 'Exit fullscreen' : 'Fullscreen'}"
+          >${this.fullscreenActive ? '⤢' : '⛶'}</button>
+        ` : ''}
       </div>
       <div class="a2-transport-options">
         <div class="a2-transport-option">
@@ -932,7 +1017,14 @@ export class ArenaApp2 {
 
     const live = this.liveMetricsFor(day);
     const activeTabMeta = tabs.find((tab) => tab.id === this.activeTab) ?? tabs[0];
+    const mobileSheet = this.isMobileWatch() ? `
+      <div class="a2-detail-sheet-head">
+        <div class="a2-detail-sheet-handle" aria-hidden="true"></div>
+        <button class="a2-detail-close" data-a2-action="close-detail" type="button" aria-label="Close details">✕</button>
+      </div>
+    ` : '';
     this.requireElement('a2-detail').innerHTML = `
+      ${mobileSheet}
       <div class="a2-detail-layout">
         <nav class="a2-detail-tabs" aria-label="Day detail sections">
           ${tabs.map((tab) => `
@@ -1106,8 +1198,7 @@ export class ArenaApp2 {
       ? `${this.allReplaySummaries().length} saved replays — click one, then press Play Day.`
       : 'Compare completed 30-day runs — click a row to load a replay.';
     if (this.isMobileWatch()) {
-      this.sidebarCollapsed = false;
-      this.detailPanelOpen = false;
+      this.applyMobilePanelState(openReplayDrawerState());
       this.syncLayoutClasses();
     }
     this.renderSidebar();

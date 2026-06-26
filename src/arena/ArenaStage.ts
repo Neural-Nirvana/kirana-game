@@ -149,6 +149,10 @@ export class ArenaStage {
     this.scene?.stopReplay();
   }
 
+  refreshScale() {
+    this.game?.scale.refresh();
+  }
+
   destroy() {
     this.game?.destroy(true);
     this.game = undefined;
