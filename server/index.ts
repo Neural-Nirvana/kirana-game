@@ -13,6 +13,7 @@ import {
   listTrainingExamplesForRun,
 } from './dataset-lab';
 import { openDatabase } from './db';
+import { appBasePath, appRoute, cookiePath } from './base-path';
 import { loadLocalEnv } from './env';
 import { normalizeActions } from './marketing-engine';
 import { RunStore } from './run-store';
@@ -40,13 +41,13 @@ app.setErrorHandler((error, _request, reply) => {
   reply.status(statusCode).send({ error: message });
 });
 
-app.get('/api/health', async () => ({
+app.get(appRoute('/api/health', async () => ({
   ok: true,
   service: 'kirana-backend',
   db: process.env.KIRANA_DB_PATH ?? 'data/kirana.sqlite',
 }));
 
-app.get('/api/me', async (request) => {
+app.get(appRoute('/api/me', async (request) => {
   const session = getSession(request);
   if (!session) {
     return {
@@ -62,7 +63,7 @@ app.get('/api/me', async (request) => {
   };
 });
 
-app.post('/api/auth/player', async (request, reply) => {
+app.post(appRoute('/api/auth/player', async (request, reply) => {
   const body = request.body as { playerName?: string } | undefined;
   const displayName = normalizeDisplayName(body?.playerName);
   const session = sessions.createPlayerSession(displayName, request.headers['user-agent']);
@@ -75,7 +76,7 @@ app.post('/api/auth/player', async (request, reply) => {
   };
 });
 
-app.post('/api/auth/logout', async (request, reply) => {
+app.post(appRoute('/api/auth/logout', async (request, reply) => {
   sessions.deleteSessionByToken(getCookie(request.headers.cookie, SESSION_COOKIE));
   reply.header('Set-Cookie', clearSessionCookie());
   return {
@@ -84,7 +85,7 @@ app.post('/api/auth/logout', async (request, reply) => {
   };
 });
 
-app.get('/api/me/runs', async (request) => {
+app.get(appRoute('/api/me/runs', async (request) => {
   const session = requireSession(request);
   return {
     player: session.player,
@@ -92,7 +93,7 @@ app.get('/api/me/runs', async (request) => {
   };
 });
 
-app.post('/api/runs', async (request) => {
+app.post(appRoute('/api/runs', async (request) => {
   const session = requireSession(request);
   const body = request.body as { playerType?: 'human' | 'ai'; runName?: string } | undefined;
   const playerType = body?.playerType ?? 'human';
@@ -105,13 +106,13 @@ app.post('/api/runs', async (request) => {
   });
 });
 
-app.get('/api/runs/:runId/state', async (request) => {
+app.get(appRoute('/api/runs/:runId/state', async (request) => {
   const session = requireSession(request);
   const { runId } = request.params as { runId: string };
   return store.getObservation(runId, session.player.id);
 });
 
-app.post('/api/runs/:runId/step', async (request) => {
+app.post(appRoute('/api/runs/:runId/step', async (request) => {
   const session = requireSession(request);
   const { runId } = request.params as { runId: string };
   const body = request.body as Partial<PlayerActions> | { actions?: Partial<PlayerActions>; expectedDay?: number } | undefined;
@@ -125,13 +126,13 @@ app.post('/api/runs/:runId/step', async (request) => {
   });
 });
 
-app.get('/api/runs/:runId/timeline', async (request) => {
+app.get(appRoute('/api/runs/:runId/timeline', async (request) => {
   const session = requireSession(request);
   const { runId } = request.params as { runId: string };
   return { runId, timeline: store.getTimeline(runId, session.player.id) };
 });
 
-app.post('/api/openenv/reset', async () => {
+app.post(appRoute('/api/openenv/reset', async () => {
   const observation = store.createRun('human');
   return {
     episode_id: observation.runId,
@@ -142,7 +143,7 @@ app.post('/api/openenv/reset', async () => {
   };
 });
 
-app.post('/api/openenv/step', async (request) => {
+app.post(appRoute('/api/openenv/step', async (request) => {
   const body = request.body as { episode_id?: string; action?: Partial<PlayerActions> } | undefined;
   if (!body?.episode_id) throw new Error('episode_id is required');
   const response = store.stepOpenEnvRun(body.episode_id, body.action ?? {});
@@ -159,7 +160,7 @@ app.post('/api/openenv/step', async (request) => {
   };
 });
 
-app.get('/api/openenv/state', async (request) => {
+app.get(appRoute('/api/openenv/state', async (request) => {
   const query = request.query as { episode_id?: string };
   if (!query.episode_id) throw new Error('episode_id is required');
   const observation = store.getOpenEnvObservation(query.episode_id);
@@ -172,13 +173,13 @@ app.get('/api/openenv/state', async (request) => {
   };
 });
 
-app.post('/api/ai-runs', async (request) => {
+app.post(appRoute('/api/ai-runs', async (request) => {
   const body = request.body as { profile?: string; model?: string } | undefined;
   const result = runAiBenchmark(body?.profile ?? 'balanced', body?.model ?? 'heuristic-v1');
   return result;
 });
 
-app.get('/api/ai-runs/:runId', async (request) => {
+app.get(appRoute('/api/ai-runs/:runId', async (request) => {
   const { runId } = request.params as { runId: string };
   const observation = store.getAiObservation(runId);
   return {
@@ -189,7 +190,7 @@ app.get('/api/ai-runs/:runId', async (request) => {
   };
 });
 
-app.get('/api/ai-runs/:runId/provider-responses', async (request) => {
+app.get(appRoute('/api/ai-runs/:runId/provider-responses', async (request) => {
   const { runId } = request.params as { runId: string };
   const query = request.query as { day?: string; includeBodies?: string } | undefined;
   const day = query?.day ? Number(query.day) : undefined;
@@ -207,11 +208,11 @@ app.get('/api/ai-runs/:runId/provider-responses', async (request) => {
   };
 });
 
-app.get('/api/arena/system-prompt', async () => arena.systemPrompt());
+app.get(appRoute('/api/arena/system-prompt', async () => arena.systemPrompt());
 
-app.get('/api/arena/models', async () => arena.models());
+app.get(appRoute('/api/arena/models', async () => arena.models());
 
-app.get('/api/arena/replays', async (request) => {
+app.get(appRoute('/api/arena/replays', async (request) => {
   const query = request.query as { status?: string; model?: string; limit?: string } | undefined;
   return {
     replays: store.listAiReplaySummaries({
@@ -222,41 +223,41 @@ app.get('/api/arena/replays', async (request) => {
   };
 });
 
-app.get('/api/arena/scoreboard', async (request) => {
+app.get(appRoute('/api/arena/scoreboard', async (request) => {
   const query = request.query as { limit?: string } | undefined;
   return {
     rows: store.getArenaScoreboard(query?.limit ? Number(query.limit) : undefined),
   };
 });
 
-app.post('/api/arena/runs', async (request) => {
+app.post(appRoute('/api/arena/runs', async (request) => {
   const body = request.body as ArenaStartRequest | undefined;
   return arena.start(body ?? {});
 });
 
-app.post('/api/arena/deepseek-flash-runs', async (request) => {
+app.post(appRoute('/api/arena/deepseek-flash-runs', async (request) => {
   const body = request.body as Omit<ArenaStartRequest, 'models' | 'mode'> | undefined;
   return arena.startDeepSeekFlash(body ?? {});
 });
 
-app.post('/api/arena/max-capability-runs', async (request) => {
+app.post(appRoute('/api/arena/max-capability-runs', async (request) => {
   const body = request.body as Omit<ArenaStartRequest, 'mode'> | undefined;
   return arena.startMaxCapability(body ?? {});
 });
 
-app.get('/api/arena/runs/:arenaId', async (request) => {
+app.get(appRoute('/api/arena/runs/:arenaId', async (request) => {
   const { arenaId } = request.params as { arenaId: string };
   return arena.get(arenaId);
 });
 
-app.post('/api/arena/runs/:arenaId/resume', async (request) => {
+app.post(appRoute('/api/arena/runs/:arenaId/resume', async (request) => {
   const { arenaId } = request.params as { arenaId: string };
   return arena.resume(arenaId);
 });
 
-app.get('/api/dataset/stats', async () => store.getDatasetStats());
+app.get(appRoute('/api/dataset/stats', async () => store.getDatasetStats());
 
-app.get('/api/dataset/runs', async (request) => {
+app.get(appRoute('/api/dataset/runs', async (request) => {
   const query = request.query as {
     source?: 'all' | 'human' | 'ai' | 'heuristic';
     status?: string;
@@ -275,7 +276,7 @@ app.get('/api/dataset/runs', async (request) => {
   };
 });
 
-app.get('/api/dataset/runs/:runId', async (request) => {
+app.get(appRoute('/api/dataset/runs/:runId', async (request) => {
   const { runId } = request.params as { runId: string };
   const meta = store.getDatasetRunMeta(runId);
   const examples = listTrainingExamplesForRun(store, runId).map((example) => ({
@@ -296,12 +297,12 @@ app.get('/api/dataset/runs/:runId', async (request) => {
   return { meta, examples };
 });
 
-app.get('/api/dataset/runs/:runId/examples/:day', async (request) => {
+app.get(appRoute('/api/dataset/runs/:runId/examples/:day', async (request) => {
   const { runId, day } = request.params as { runId: string; day: string };
   return buildTrainingExample(store, runId, Number(day));
 });
 
-app.post('/api/dataset/generate/heuristic', async (request) => {
+app.post(appRoute('/api/dataset/generate/heuristic', async (request) => {
   const body = request.body as {
     count?: number;
     seedStart?: number;
@@ -314,7 +315,7 @@ app.post('/api/dataset/generate/heuristic', async (request) => {
   return generateHeuristicDatasetRuns(store, { count, seedStart, maxDays, profile: body?.profile });
 });
 
-app.post('/api/dataset/export', async (request, reply) => {
+app.post(appRoute('/api/dataset/export', async (request, reply) => {
   const body = request.body as {
     runIds?: string[];
     source?: 'all' | 'human' | 'ai' | 'heuristic';
@@ -329,7 +330,7 @@ app.post('/api/dataset/export', async (request, reply) => {
   return reply.send(jsonl);
 });
 
-app.post('/api/llm-day-context', async (request, reply) => {
+app.post(appRoute('/api/llm-day-context', async (request, reply) => {
   const context = await getLlmDayContext(request.body);
   if (!context) {
     reply.status(503).send({ error: 'LLM day context is not configured or unavailable' });
@@ -338,8 +339,14 @@ app.post('/api/llm-day-context', async (request, reply) => {
   return context;
 });
 
+const base = appBasePath();
+if (base) {
+  app.get('/', async (_request, reply) => reply.redirect(302, `${base}/`));
+  app.get(base, async (_request, reply) => reply.redirect(302, `${base}/`));
+}
+
 if (process.env.KIRANA_SERVE_STATIC !== 'false' && existsSync(staticRoot)) {
-  app.get('/*', async (request, reply) => {
+  app.get(appRoute('/*'), async (request, reply) => {
     const urlPath = decodeURIComponent((request.params as { '*': string })['*'] ?? '');
     const safePath = urlPath.split('/').filter((part) => part && part !== '..').join('/');
     const candidate = resolve(staticRoot, safePath);
@@ -436,12 +443,12 @@ function getCookie(cookieHeader: string | undefined, name: string): string | und
 function buildSessionCookie(token: string, expiresAt: string): string {
   const secure = process.env.KIRANA_COOKIE_SECURE === 'true' ? '; Secure' : '';
   const maxAge = Math.max(0, Math.floor((new Date(expiresAt).getTime() - Date.now()) / 1000));
-  return `${SESSION_COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${secure}`;
+  return `${SESSION_COOKIE}=${encodeURIComponent(token)}; Path=${cookiePath()}; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${secure}`;
 }
 
 function clearSessionCookie(): string {
   const secure = process.env.KIRANA_COOKIE_SECURE === 'true' ? '; Secure' : '';
-  return `${SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure}`;
+  return `${SESSION_COOKIE}=; Path=${cookiePath()}; HttpOnly; SameSite=Lax; Max-Age=0${secure}`;
 }
 
 function httpError(message: string, statusCode: number) {

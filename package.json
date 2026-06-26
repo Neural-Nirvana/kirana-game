@@ -11,8 +11,8 @@
     "start": "npm run server:start",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "test": "tsx --test src/arena/arena-mobile-layout.test.ts",
-    "test:arena-mobile": "npm run build && npm run test && node scripts/verify-arena-mobile.mjs --bases=local,prod"
+    "test": "tsx --test src/arena/arena-mobile-layout.test.ts src/base-path.test.ts",
+    "test:arena-mobile": "KIRANA_BASE_PATH=/dukaanbench npm run build && npm run test && KIRANA_BASE_PATH=/dukaanbench node scripts/verify-arena-mobile.mjs --bases=local,prod"
   },
   "devDependencies": {
     "playwright": "^1.61.1",

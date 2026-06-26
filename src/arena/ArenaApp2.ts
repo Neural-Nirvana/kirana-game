@@ -1,6 +1,7 @@
 import './arena2.css';
 import './arena2-editorial.css';
 import './provider-brand.css';
+import { appPath } from '../base-path';
 import { PRODUCT_NAME, PRODUCT_TAGLINE, SHOP_NAME, SHOP_LOCATION } from '../constants/brand';
 import sidebarHeroUrl from '../assets/arena2/sidebar-hero.jpg';
 import emptyStateUrl from '../assets/arena2/empty-state.jpg';
@@ -782,7 +783,7 @@ export class ArenaApp2 {
         <button class="a2-sidebar-toggle" data-a2-action="toggle-sidebar" type="button" aria-label="Toggle sidebar">☰</button>
         <div>
           <h1>${PRODUCT_NAME}</h1>
-          <p>${PRODUCT_TAGLINE} · <a href="/about" class="a2-v1-link">about</a> · <a href="/arena" class="a2-v1-link">v1</a></p>
+          <p>${PRODUCT_TAGLINE} · <a href="${appPath('/about')}" class="a2-v1-link">about</a> · <a href="${appPath('/arena')}" class="a2-v1-link">v1</a></p>
         </div>
       </div>
       <div class="a2-metrics">
@@ -1192,7 +1193,7 @@ export class ArenaApp2 {
             <button class="${replayCount > 0 ? 'a2-cta-secondary a2-intro-primary' : 'a2-cta-primary a2-intro-primary'}" data-a2-action="intro-leaderboard" type="button">
               View Leaderboard
             </button>
-            <a class="a2-intro-link subtle" href="/about">What is ${PRODUCT_NAME}? →</a>
+            <a class="a2-intro-link subtle" href="${appPath('/about')}">What is ${PRODUCT_NAME}? →</a>
           </div>
         ` : ''}
         ${isLoading ? `
@@ -1204,7 +1205,7 @@ export class ArenaApp2 {
         ${isError ? `
           <div class="a2-intro-actions">
             <button class="a2-cta-primary a2-intro-primary" data-a2-action="retry-backend" type="button">Retry connection</button>
-            <a class="a2-intro-link subtle" href="/about">Read the project overview →</a>
+            <a class="a2-intro-link subtle" href="${appPath('/about')}">Read the project overview →</a>
           </div>
         ` : ''}
       </div>

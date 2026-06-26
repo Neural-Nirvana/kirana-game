@@ -1,3 +1,4 @@
+import { apiPath } from '../../base-path';
 import type { PlayerActions, PlayerSessionResponse, RunObservation, StepRunResponse } from '../../types';
 
 interface AiRunResponse {
@@ -58,7 +59,7 @@ export class BackendGameClient {
   }
 
   private async request<T>(path: string, init: RequestInit = {}): Promise<T> {
-    const response = await fetch(path, {
+    const response = await fetch(apiPath(path), {
       ...init,
       credentials: 'same-origin',
       headers: {

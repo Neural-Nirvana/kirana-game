@@ -1,3 +1,4 @@
+import { apiPath } from '../../base-path';
 import type { DayResult, LLMDayContext, ProductId } from '../../types';
 import { PRODUCTS } from '../../constants/products';
 import { GameState } from '../GameState';
@@ -14,7 +15,7 @@ interface ContextRequest {
 }
 
 export class LLMDayContextClient {
-  private readonly endpoint = '/api/llm-day-context';
+  private readonly endpoint = apiPath('/api/llm-day-context');
   private readonly timeoutMs = 65000;
   private cache = new Map<string, Promise<LLMDayContext | undefined>>();
 

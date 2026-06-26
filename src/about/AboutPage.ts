@@ -1,4 +1,5 @@
 import './about.css';
+import { appPath } from '../base-path';
 import '../arena/provider-brand.css';
 import { PRODUCT_NAME, PRODUCT_TAGLINE, SHOP_NAME, SHOP_LOCATION } from '../constants/brand';
 import { DEFAULT_NEIGHBORHOOD_PROFILE } from '../constants/neighborhood';
@@ -126,7 +127,7 @@ export class AboutPage {
               <a href="#arena" data-section="arena">Arena</a>
             </div>
             <div class="about-nav-cta">
-              <a class="about-btn about-btn-primary" href="/arena-2">Open AI Arena</a>
+              <a class="about-btn about-btn-primary" href="${appPath('/arena-2')}">Open AI Arena</a>
             </div>
           </div>
         </nav>
@@ -148,8 +149,8 @@ export class AboutPage {
                 trust, and marketing are then scored by the backend.
               </p>
               <div class="about-hero-actions">
-                <a class="about-btn about-btn-primary about-btn-lg" href="/arena-2">Watch AI Arena</a>
-                <a class="about-btn about-btn-ghost about-btn-lg" href="/play">Play the shop</a>
+                <a class="about-btn about-btn-primary about-btn-lg" href="${appPath('/arena-2')}">Watch AI Arena</a>
+                <a class="about-btn about-btn-ghost about-btn-lg" href="${appPath('/play')}">Play the shop</a>
               </div>
               <div class="about-hero-stats">
                 <div class="about-stat"><strong>30</strong><span>Simulated shop days</span></div>
@@ -168,7 +169,7 @@ export class AboutPage {
                 ${this.renderLeaderboardBlock()}
               </div>
               <div class="about-home-cta">
-                <a class="about-btn about-btn-primary about-btn-lg" href="/arena-2">Open AI Arena</a>
+                <a class="about-btn about-btn-primary about-btn-lg" href="${appPath('/arena-2')}">Open AI Arena</a>
                 <p>Replay saved runs, inspect the model's action JSON, and watch the day play out customer by customer.</p>
               </div>
             </div>
@@ -413,8 +414,8 @@ export class AboutPage {
             AI copilots that can read demand, protect cash, plan offers, and learn from yesterday's sales.
           </p>
           <div class="about-cta-actions">
-            <a class="about-btn about-btn-primary about-btn-lg" href="/arena-2">Open AI Arena</a>
-            <a class="about-btn about-btn-warm about-btn-lg" href="/play">Try the human game</a>
+            <a class="about-btn about-btn-primary about-btn-lg" href="${appPath('/arena-2')}">Open AI Arena</a>
+            <a class="about-btn about-btn-warm about-btn-lg" href="${appPath('/play')}">Try the human game</a>
           </div>
         </section>
 
@@ -571,7 +572,7 @@ export class AboutPage {
           ${leaderboardStat('Sold units', row.soldUnits.toLocaleString('en-IN'))}
           ${leaderboardStat('Missed units', row.missedUnits.toLocaleString('en-IN'), row.missedUnits > 0 ? 'bad' : 'good', true)}
         </div>
-        <a class="about-leaderboard-card-link" href="/arena-2?runId=${encodeURIComponent(row.runId)}">Watch replay →</a>
+        <a class="about-leaderboard-card-link" href="${appPath(`/arena-2?runId=${encodeURIComponent(row.runId)}`)}">Watch replay →</a>
       </article>
     `;
   }

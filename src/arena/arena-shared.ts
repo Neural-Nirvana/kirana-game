@@ -1,3 +1,4 @@
+import { apiPath } from '../base-path';
 import { DEFAULT_NEIGHBORHOOD_PROFILE } from '../constants/neighborhood';
 import type {
   ArenaJobResponse,
@@ -42,7 +43,7 @@ export const DEFAULT_MODEL_PRESETS: ArenaModelPreset[] = [
 ];
 
 export async function requestJson<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const response = await fetch(path, {
+  const response = await fetch(apiPath(path), {
     ...init,
     credentials: 'same-origin',
     headers: { 'Content-Type': 'application/json', ...(init.headers ?? {}) },

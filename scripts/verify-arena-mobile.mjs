@@ -15,10 +15,17 @@ const STAGE_ASPECT = 1600 / 560;
 const SCRATCH_DEFAULT = process.env.ARENA_MOBILE_SCRATCH
   ?? '/var/folders/n0/h5ddqnwn5jbd8y0lclpvqs_m0000gn/T/grok-goal-4e0fa7740486/implementer';
 
+const APP_PREFIX = (process.env.KIRANA_BASE_PATH ?? '/dukaanbench').replace(/\/$/, '');
+
 const BASE_PRESETS = {
   local: 'http://127.0.0.1:8787',
   prod: 'http://34.14.197.72',
 };
+
+function appUrl(base, subpath) {
+  const normalized = subpath.startsWith('/') ? subpath : `/${subpath}`;
+  return `${base}${APP_PREFIX}${normalized}`;
+}
 
 const { values } = parseArgs({
   options: {
@@ -42,7 +49,7 @@ function resolveBases() {
 
 async function fetchRunId(base) {
   if (RUN_ID) return RUN_ID;
-  const res = await fetch(`${base}/api/arena/replays`);
+  const res = await fetch(appUrl(base, '/api/arena/replays'));
   if (!res.ok) throw new Error(`Failed to load replays from ${base}: ${res.status}`);
   const data = await res.json();
   const runId = data.replays?.[0]?.runId;
@@ -150,7 +157,7 @@ async function runPass(page, base, runId, passLabel, log) {
   });
 
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto(`${base}/arena-2?runId=${encodeURIComponent(runId)}`, { waitUntil: 'domcontentloaded' });
+  await page.goto(appUrl(base, `/arena-2?runId=${encodeURIComponent(runId)}`), { waitUntil: 'domcontentloaded' });
 
   await page.locator('.a2-mobile-watch').waitFor({ state: 'attached', timeout: 15000 });
   await page.getByText(/Day 01/).first().waitFor({ state: 'visible', timeout: 45000 });
@@ -277,6 +284,7 @@ async function main() {
   const bases = resolveBases();
   const log = [
     `timestamp=${new Date().toISOString()}`,
+    `appPrefix=${APP_PREFIX}`,
     `bases=${bases.join(',')}`,
     `scratch=${SCRATCH}`,
     '',

@@ -1,4 +1,5 @@
 import './dataset-lab.css';
+import { apiPath, appPath } from '../base-path';
 import { PRODUCT_NAME } from '../constants/brand';
 
 type DatasetStats = {
@@ -76,7 +77,7 @@ type TrainingExample = ExampleSummary & {
 };
 
 async function requestJson<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const response = await fetch(path, {
+  const response = await fetch(apiPath(path), {
     ...init,
     credentials: 'same-origin',
     headers: { 'Content-Type': 'application/json', ...(init.headers ?? {}) },
@@ -290,7 +291,7 @@ export class DatasetLabApp {
     this.setStatus('Building JSONL export…', 'neutral');
     this.render();
     try {
-      const response = await fetch('/api/dataset/export', {
+      const response = await fetch(apiPath('/api/dataset/export'), {
         method: 'POST',
         credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json' },
@@ -347,9 +348,9 @@ export class DatasetLabApp {
             </p>
           </div>
           <nav class="lab-nav">
-            <a href="/play">Play shop</a>
-            <a href="/arena-2">Arena</a>
-            <a href="/about">About</a>
+            <a href="${appPath('/play')}">Play shop</a>
+            <a href="${appPath('/arena-2')}">Arena</a>
+            <a href="${appPath('/about')}">About</a>
             <button type="button" data-lab-action="refresh" ${this.busy ? 'disabled' : ''}>Refresh</button>
           </nav>
         </header>

@@ -1,3 +1,4 @@
+import { apiPath } from '../base-path';
 import { PRODUCT_NAME, PRODUCT_TAGLINE, SHOP_NAME } from '../constants/brand';
 import { adaptAiReplay } from './arena-adapter';
 import {
@@ -1169,7 +1170,7 @@ function placeTypeLabel(type: string) {
 }
 
 async function requestJson<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const response = await fetch(path, {
+  const response = await fetch(apiPath(path), {
     ...init,
     credentials: 'same-origin',
     headers: {

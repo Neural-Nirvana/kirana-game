@@ -1,9 +1,10 @@
 import './style.css';
+import { stripAppBase } from './base-path';
 import { GameController } from './game/GameController';
 
 // Initialize the game when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
-  const path = window.location.pathname;
+  const path = stripAppBase(window.location.pathname);
   if (path.startsWith('/lab')) {
     void import('./lab/DatasetLabApp').then(({ DatasetLabApp }) => {
       const lab = new DatasetLabApp('app');
