@@ -206,11 +206,22 @@
 
 /* ── Body layout ── */
 .a2-body {
+  position: relative;
   display: grid;
   grid-template-columns: var(--a2-sidebar-w) 1fr var(--a2-detail-w);
+  grid-template-rows: 1fr;
   flex: 1;
   min-height: 0;
   overflow: hidden;
+}
+
+/* Mobile panel scrim must not occupy the first desktop grid column. */
+.a2-scrim {
+  display: none;
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  pointer-events: none;
 }
 
 .a2-body.sidebar-collapsed {
@@ -225,6 +236,8 @@
 
 /* ── Sidebar ── */
 .a2-sidebar {
+  grid-column: 1;
+  grid-row: 1;
   display: flex;
   flex-direction: column;
   border-right: 1px solid var(--a2-line);
@@ -673,6 +686,8 @@
 
 /* ── Theater (center) ── */
 .a2-theater {
+  grid-column: 2;
+  grid-row: 1;
   display: flex;
   flex-direction: column;
   min-width: 0;
@@ -1402,6 +1417,8 @@
 
 /* ── Detail panel (right) ── */
 .a2-detail {
+  grid-column: 3;
+  grid-row: 1;
   display: flex;
   flex-direction: column;
   min-width: 0;
@@ -2035,12 +2052,21 @@
   }
 
   .a2-sidebar {
+    grid-column: 1;
+    grid-row: 1;
     max-height: 200px;
     border-right: none;
     border-bottom: 1px solid var(--a2-line);
   }
 
+  .a2-theater {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
   .a2-detail {
+    grid-column: 1;
+    grid-row: 3;
     max-height: 260px;
     border-left: none;
     border-top: 1px solid var(--a2-line);
@@ -2111,6 +2137,8 @@
 
   .a2-mobile-watch .a2-scrim.visible {
     display: block;
+    pointer-events: auto;
+    cursor: pointer;
   }
 
   .a2-mobile-watch .a2-sidebar {
