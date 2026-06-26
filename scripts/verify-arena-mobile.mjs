@@ -245,7 +245,14 @@ async function runPass(page, base, runId, passLabel, log) {
   });
   lines.push(`landscape: ${JSON.stringify(landscape)}`);
   assert(landscape.cinema, 'missing a2-mobile-cinema in landscape');
-  assert(landscape.stageHeight > portrait.stageHeight * 1.4, 'cinema stage not taller in landscape');
+  assert(
+    landscape.stageWidth > portrait.stageWidth * 1.5,
+    `cinema stage should be wider than portrait (${landscape.stageWidth} vs ${portrait.stageWidth})`,
+  );
+  assert(
+    portrait.stageHeight > landscape.stageHeight,
+    `portrait stage should use more vertical space (${portrait.stageHeight} vs ${landscape.stageHeight})`,
+  );
   assertCinemaStage(landscape, landscape.viewportWidth, 390, 'landscape');
   assert(landscape.stageArea / landscape.viewportArea > 0.55, 'cinema stage should dominate viewport');
 
