@@ -153,10 +153,10 @@ export class AboutPage {
                 <a class="about-btn about-btn-ghost about-btn-lg" href="${appPath('/play')}">Play the shop</a>
               </div>
               <div class="about-hero-stats">
-                <div class="about-stat"><strong>30</strong><span>Simulated shop days</span></div>
-                <div class="about-stat"><strong>1</strong><span>Action JSON per day</span></div>
-                <div class="about-stat"><strong>${households}</strong><span>Nearby homes</span></div>
-                <div class="about-stat"><strong>7</strong><span>Scoring buckets</span></div>
+                <div class="about-stat"><strong>30</strong><span>Days in each run</span></div>
+                <div class="about-stat"><strong>1</strong><span>Plan submitted each morning</span></div>
+                <div class="about-stat"><strong>${households}</strong><span>Households nearby</span></div>
+                <div class="about-stat"><strong>7</strong><span>Ways each day is scored</span></div>
               </div>
             </div>
             <div class="about-hero-leaderboard about-reveal visible" id="leaderboard">
