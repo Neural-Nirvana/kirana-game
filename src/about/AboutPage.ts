@@ -551,22 +551,27 @@ export class AboutPage {
     row: ArenaScoreboardResponse['rows'][number],
     index: number
   ): string {
+    const rank = index + 1;
+    const podiumClass = rank <= 3 ? ` about-leaderboard-card--rank-${rank}` : '';
+    const trustTone = row.finalTrust >= 80 ? 'good' : row.finalTrust >= 50 ? 'warn' : 'bad';
+
     return `
-      <article class="about-leaderboard-card">
-        <div class="about-leaderboard-card-head">
-          ${renderBenchmarkModelCell(row.model, DEFAULT_MODEL_PRESETS, { rank: index + 1 })}
-          <div class="about-leaderboard-card-reward ${row.score >= 0 ? 'good' : 'bad'}">
-            <span>Reward</span>
+      <article class="about-leaderboard-card${podiumClass}">
+        <header class="about-leaderboard-card-header">
+          ${renderBenchmarkModelCell(row.model, DEFAULT_MODEL_PRESETS, { rank })}
+          <div class="about-leaderboard-card-score ${row.score >= 0 ? 'good' : 'bad'}">
             <strong>${signed(row.score)}</strong>
+            <span>Reward</span>
           </div>
+        </header>
+        <div class="about-leaderboard-card-grid">
+          ${leaderboardStat('Final cash', money(row.finalCash))}
+          ${leaderboardStat('Trust', `${row.finalTrust}%`, trustTone)}
+          ${leaderboardStat('Profit', money(row.profit), row.profit >= 0 ? 'good' : 'bad')}
+          ${leaderboardStat('Sold units', row.soldUnits.toLocaleString('en-IN'))}
+          ${leaderboardStat('Missed units', row.missedUnits.toLocaleString('en-IN'), row.missedUnits > 0 ? 'bad' : 'good', true)}
         </div>
-        <dl class="about-leaderboard-card-metrics">
-          <div><dt>Cash</dt><dd>${money(row.finalCash)}</dd></div>
-          <div><dt>Trust</dt><dd>${row.finalTrust}%</dd></div>
-          <div><dt>Profit</dt><dd class="${row.profit >= 0 ? 'good' : 'bad'}">${money(row.profit)}</dd></div>
-          <div><dt>Sold</dt><dd>${row.soldUnits.toLocaleString('en-IN')}</dd></div>
-          <div><dt>Missed</dt><dd class="${row.missedUnits > 0 ? 'bad' : 'good'}">${row.missedUnits.toLocaleString('en-IN')}</dd></div>
-        </dl>
+        <a class="about-leaderboard-card-link" href="/arena-2?runId=${encodeURIComponent(row.runId)}">Watch replay →</a>
       </article>
     `;
   }
@@ -656,6 +661,17 @@ function feature(icon: string, title: string, body: string) {
     <div class="about-feature">
       <img src="${icon}" alt="" />
       <div><strong>${escapeHtml(title)}</strong><span>${escapeHtml(body)}</span></div>
+    </div>
+  `;
+}
+
+function leaderboardStat(label: string, value: string, tone = '', wide = false) {
+  const toneClass = tone ? ` ${tone}` : '';
+  const wideClass = wide ? ' about-leaderboard-stat--wide' : '';
+  return `
+    <div class="about-leaderboard-stat${wideClass}">
+      <span class="about-leaderboard-stat-label">${escapeHtml(label)}</span>
+      <strong class="about-leaderboard-stat-value${toneClass}">${escapeHtml(value)}</strong>
     </div>
   `;
 }
