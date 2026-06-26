@@ -61,10 +61,16 @@ function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
 
-function assertPortraitStage(metrics, viewportWidth, label) {
-  const aspect = metrics.stageWidth / metrics.stageHeight;
-  assert(metrics.stageWidth >= viewportWidth * 0.85, `${label}: stage width ${metrics.stageWidth} < 85% viewport`);
-  assert(Math.abs(aspect - STAGE_ASPECT) < 0.25, `${label}: stage aspect ${aspect.toFixed(2)} expected ~${STAGE_ASPECT.toFixed(2)}`);
+function assertPortraitStage(metrics, viewportWidth, viewportHeight, label) {
+  assert(metrics.stageWidth >= viewportWidth * 0.92, `${label}: stage width ${metrics.stageWidth} < 92% viewport`);
+  assert(
+    metrics.stageHeight >= viewportHeight * 0.52,
+    `${label}: stage height ${metrics.stageHeight} should fill portrait viewport (min ${Math.round(viewportHeight * 0.52)}px)`,
+  );
+  assert(
+    metrics.stageHeight > viewportWidth * 0.34,
+    `${label}: portrait stage still height-limited at ${metrics.stageHeight}px`,
+  );
 }
 
 function assertCinemaStage(metrics, viewportWidth, viewportHeight, label) {
@@ -177,6 +183,7 @@ async function runPass(page, base, runId, passLabel, log) {
       stageWidth: rect?.width ?? 0,
       stageHeight: rect?.height ?? 0,
       viewportWidth: window.innerWidth,
+      viewportHeight: window.innerHeight,
     };
   });
 
@@ -185,7 +192,7 @@ async function runPass(page, base, runId, passLabel, log) {
   assert(portrait.hasTopBar, 'missing mobile top bar');
   assert(portrait.hasScrim, 'missing scrim');
   assert(portrait.hasFullscreenBtn, 'missing fullscreen control');
-  assertPortraitStage(portrait, portrait.viewportWidth, 'portrait');
+  assertPortraitStage(portrait, portrait.viewportWidth, portrait.viewportHeight, 'portrait');
 
   await page.getByRole('button', { name: 'Day details' }).click();
   await page.waitForTimeout(400);

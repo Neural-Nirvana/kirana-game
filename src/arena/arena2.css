@@ -2182,6 +2182,13 @@
 
   .a2-mobile-watch .a2-theater {
     grid-row: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .a2-mobile-watch:not(.a2-mobile-cinema) .a2-screen-deck {
+    flex: 1;
     min-height: 0;
   }
 
@@ -2260,28 +2267,34 @@
     text-overflow: ellipsis;
   }
 
-  .a2-mobile-watch .a2-stage-cinema {
-    padding: 6px 8px 4px;
+  .a2-mobile-watch:not(.a2-mobile-cinema) .a2-stage-cinema {
+    flex: 1;
     min-height: 0;
+    padding: 4px 6px 2px;
+    align-items: stretch;
+    justify-content: stretch;
   }
 
-  .a2-mobile-watch .a2-stage-frame {
+  .a2-mobile-watch:not(.a2-mobile-cinema) .a2-stage-frame {
+    flex: 1;
     width: 100%;
+    height: 100%;
     max-width: 100%;
-    aspect-ratio: 1600 / 560;
+    max-height: 100%;
     min-height: 0;
+    aspect-ratio: auto;
     border-radius: 10px;
   }
 
   .a2-mobile-watch .a2-transport-deck {
     flex-shrink: 0;
-    padding: 0 8px 10px;
+    padding: 0 6px 6px;
   }
 
   .a2-mobile-watch .a2-transport {
     grid-template-columns: 1fr;
-    gap: 8px;
-    padding: 8px 10px;
+    gap: 6px;
+    padding: 6px 8px;
   }
 
   .a2-mobile-watch .a2-transport-label {
