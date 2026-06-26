@@ -1649,11 +1649,30 @@ body.about-route {
     padding-bottom: 48px;
   }
 
+  .about-hero-copy {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .about-brand-logo {
+    height: 48px;
+    max-width: min(280px, 72vw);
+  }
+
   .about-hero-logo {
-    display: none;
+    order: -1;
+    width: 100%;
+    max-width: none;
+    max-height: none;
+    height: auto;
+    min-height: 96px;
+    margin: 0 0 12px;
+    object-fit: contain;
+    object-position: left center;
   }
 
   .about-eyebrow {
+    order: 0;
     font-size: 11px;
   }
 
@@ -1792,6 +1811,15 @@ body.about-route {
 @media (max-width: 420px) {
   .about-nav-inner {
     padding-inline: 12px;
+  }
+
+  .about-brand-logo {
+    height: 44px;
+    max-width: min(250px, 68vw);
+  }
+
+  .about-hero-logo {
+    min-height: 88px;
   }
 
   .about-nav-cta .about-btn {

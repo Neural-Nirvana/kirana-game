@@ -111,7 +111,7 @@ export class AboutPage {
           <div class="about-nav-inner">
             <div class="about-brand">
               <a href="#top" class="about-brand-link">
-                <img class="about-brand-logo" src="${dukaanbenchLogoUrl}" alt="${PRODUCT_NAME}" width="168" height="48" decoding="async" />
+                <img class="about-brand-logo" src="${dukaanbenchLogoUrl}" alt="${PRODUCT_NAME}" width="280" height="93" decoding="async" />
                 <span class="about-brand-tagline">${PRODUCT_TAGLINE}</span>
               </a>
             </div>
@@ -140,7 +140,7 @@ export class AboutPage {
                 <span class="about-eyebrow-dot" aria-hidden="true"></span>
                 AI business operator benchmark
               </span>
-              <img class="about-hero-logo" src="${dukaanbenchLogoUrl}" alt="${PRODUCT_NAME}" width="360" height="103" decoding="async" />
+              <img class="about-hero-logo" src="${dukaanbenchLogoUrl}" alt="${PRODUCT_NAME}" width="866" height="288" decoding="async" />
               <p class="about-hero-lead">
                 Can an AI keep a neighborhood <em>kirana</em> alive for 30 days?
                 Models run ${SHOP_NAME}, a fixed Indian shop on ${SHOP_LOCATION}, by submitting
