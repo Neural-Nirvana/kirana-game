@@ -2088,3 +2088,246 @@
     text-align: left;
   }
 }
+
+/* ── Mobile Watch mode (portrait-first) ── */
+@media (max-width: 768px) {
+  .a2-mobile-watch .a2-body {
+    position: relative;
+    display: grid;
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr;
+    overflow: hidden;
+  }
+
+  .a2-mobile-watch .a2-scrim {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    background: rgba(2, 6, 23, 0.55);
+    backdrop-filter: blur(2px);
+    cursor: pointer;
+  }
+
+  .a2-mobile-watch .a2-scrim.visible {
+    display: block;
+  }
+
+  .a2-mobile-watch .a2-sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    z-index: 50;
+    width: min(88vw, 320px);
+    max-height: none;
+    border-right: 1px solid var(--a2-line);
+    border-bottom: none;
+    transform: translateX(-105%);
+    transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 8px 0 32px rgba(0, 0, 0, 0.35);
+  }
+
+  .a2-mobile-watch .a2-body.sidebar-open .a2-sidebar {
+    transform: translateX(0);
+  }
+
+  .a2-mobile-watch .a2-detail {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 50;
+    max-height: none;
+    height: min(72vh, 560px);
+    border-left: none;
+    border-top: 1px solid var(--a2-line);
+    border-radius: 16px 16px 0 0;
+    transform: translateY(105%);
+    transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.35);
+  }
+
+  .a2-mobile-watch .a2-body.detail-open .a2-detail {
+    transform: translateY(0);
+  }
+
+  .a2-mobile-watch .a2-theater {
+    grid-row: 1;
+    min-height: 0;
+  }
+
+  .a2-mobile-watch .a2-theater-head,
+  .a2-mobile-watch .a2-theater-status {
+    display: none;
+  }
+
+  .a2-mobile-watch .a2-topbar {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    min-height: 48px;
+  }
+
+  .a2-mobile-watch .a2-mobile-bar-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1px;
+    padding: 6px 10px;
+    border: 1px solid rgba(148, 163, 184, 0.22);
+    border-radius: 10px;
+    background: rgba(15, 23, 42, 0.55);
+    color: #e2e8f0;
+    font-size: 10px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  .a2-mobile-watch .a2-mobile-bar-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  .a2-mobile-watch .a2-mobile-bar-btn.active {
+    border-color: rgba(245, 196, 81, 0.5);
+    background: rgba(146, 64, 14, 0.28);
+    color: var(--a2-gold);
+  }
+
+  .a2-mobile-watch .a2-mobile-bar-icon {
+    font-size: 14px;
+    line-height: 1;
+  }
+
+  .a2-mobile-watch .a2-mobile-bar-center {
+    min-width: 0;
+    text-align: center;
+  }
+
+  .a2-mobile-watch .a2-mobile-bar-center strong {
+    display: block;
+    font-family: var(--font-mono);
+    font-size: 14px;
+    font-weight: 800;
+    color: #f8fafc;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .a2-mobile-watch .a2-mobile-bar-center span {
+    display: block;
+    margin-top: 2px;
+    font-size: 10px;
+    font-weight: 700;
+    color: #94a3b8;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .a2-mobile-watch .a2-stage-cinema {
+    padding: 6px 8px 4px;
+    min-height: 0;
+  }
+
+  .a2-mobile-watch .a2-stage-frame {
+    width: 100%;
+    max-width: 100%;
+    aspect-ratio: 1600 / 560;
+    min-height: 0;
+    border-radius: 10px;
+  }
+
+  .a2-mobile-watch .a2-transport-deck {
+    flex-shrink: 0;
+    padding: 0 8px 10px;
+  }
+
+  .a2-mobile-watch .a2-transport {
+    grid-template-columns: 1fr;
+    gap: 8px;
+    padding: 8px 10px;
+  }
+
+  .a2-mobile-watch .a2-transport-label {
+    display: none;
+  }
+
+  .a2-mobile-watch .a2-transport-main {
+    justify-content: center;
+    gap: 10px;
+  }
+
+  .a2-mobile-watch .a2-transport-primary {
+    flex: 1;
+    max-width: 200px;
+  }
+
+  .a2-mobile-watch .a2-transport-primary.pick-replay {
+    border-color: rgba(245, 196, 81, 0.55);
+    background: rgba(146, 64, 14, 0.3);
+  }
+
+  .a2-mobile-watch .a2-transport-options {
+    justify-content: center;
+    gap: 12px;
+  }
+
+  .a2-mobile-watch .a2-transport-option:first-child {
+    display: none;
+  }
+
+  .a2-mobile-watch .a2-shortcut-hint {
+    display: none;
+  }
+
+  .a2-mobile-watch .a2-timeline {
+    display: none;
+  }
+
+  .a2-mobile-watch .a2-detail-tabs {
+    flex-direction: row;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    padding: 8px;
+    border-right: none;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+  }
+
+  .a2-mobile-watch .a2-detail-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .a2-mobile-watch .a2-detail-tabs button {
+    flex: 0 0 auto;
+    min-width: 64px;
+  }
+
+  .a2-mobile-watch .a2-detail-layout {
+    flex-direction: column;
+    height: 100%;
+  }
+
+  .a2-mobile-watch .a2-detail-panel {
+    flex: 1;
+    min-height: 0;
+  }
+
+  .a2-mobile-watch .a2-overlay-card {
+    max-width: calc(100vw - 32px);
+    padding: 20px 18px;
+  }
+
+  .a2-mobile-watch .a2-intro-card {
+    max-height: 85vh;
+    overflow-y: auto;
+  }
+}

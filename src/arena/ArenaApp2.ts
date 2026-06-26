@@ -70,6 +70,7 @@ export class ArenaApp2 {
   private statusMessage = 'Connecting to backend…';
   private statusError = false;
   private sidebarCollapsed = false;
+  private detailPanelOpen = false;
   private backendConnected = false;
   private backendChecked = false;
   private introActive = true;
@@ -86,11 +87,84 @@ export class ArenaApp2 {
   async start() {
     this.renderShell();
     this.bindEvents();
+    if (this.isMobileWatch()) {
+      this.sidebarCollapsed = true;
+      this.detailPanelOpen = false;
+    }
+    this.syncLayoutClasses();
+    window.addEventListener('resize', () => this.handleResize());
     this.stage = new ArenaStage(this.requireElement('a2-stage'), (metrics) => this.updateLiveMetrics(metrics));
     this.stage.mount(undefined);
     this.renderAll();
     this.showIntroOverlay('loading');
     void this.bootstrap();
+  }
+
+  private isMobileWatch() {
+    return window.matchMedia('(max-width: 768px)').matches;
+  }
+
+  private handleResize() {
+    const mobile = this.isMobileWatch();
+    const wasMobile = this.root.querySelector('.a2-root')?.classList.contains('a2-mobile-watch') ?? false;
+    if (mobile && !wasMobile) {
+      this.sidebarCollapsed = true;
+      this.detailPanelOpen = false;
+    } else if (!mobile) {
+      this.detailPanelOpen = false;
+    }
+    this.syncLayoutClasses();
+    this.renderHud(this.run?.days[this.activeDayIndex]);
+    this.renderTransport();
+  }
+
+  private syncLayoutClasses() {
+    const mobile = this.isMobileWatch();
+    const root = this.root.querySelector('.a2-root');
+    const body = this.root.querySelector('.a2-body');
+    const scrim = this.root.querySelector('#a2-scrim');
+    if (!root || !body) return;
+
+    root.classList.toggle('a2-mobile-watch', mobile);
+
+    if (mobile) {
+      body.classList.remove('sidebar-collapsed');
+      body.classList.toggle('sidebar-open', !this.sidebarCollapsed);
+      body.classList.toggle('detail-open', this.detailPanelOpen);
+      const panelsOpen = !this.sidebarCollapsed || this.detailPanelOpen;
+      body.classList.toggle('panels-open', panelsOpen);
+      scrim?.classList.toggle('visible', panelsOpen);
+    } else {
+      body.classList.remove('sidebar-open', 'detail-open', 'panels-open');
+      body.classList.toggle('sidebar-collapsed', this.sidebarCollapsed);
+      scrim?.classList.remove('visible');
+    }
+  }
+
+  private openReplayDrawer() {
+    if (!this.isMobileWatch()) return;
+    this.sidebarCollapsed = false;
+    this.detailPanelOpen = false;
+    this.sidebarSection = 'replays';
+    this.syncLayoutClasses();
+    this.renderSidebar();
+    this.renderHud(this.run?.days[this.activeDayIndex]);
+  }
+
+  private toggleDetailPanel() {
+    if (!this.isMobileWatch()) return;
+    this.detailPanelOpen = !this.detailPanelOpen;
+    if (this.detailPanelOpen) this.sidebarCollapsed = true;
+    this.syncLayoutClasses();
+    this.renderHud(this.run?.days[this.activeDayIndex]);
+  }
+
+  private closeMobilePanels() {
+    if (!this.isMobileWatch()) return;
+    this.sidebarCollapsed = true;
+    this.detailPanelOpen = false;
+    this.syncLayoutClasses();
+    this.renderHud(this.run?.days[this.activeDayIndex]);
   }
 
   private async bootstrap() {
@@ -186,7 +260,8 @@ export class ArenaApp2 {
     this.root.innerHTML = `
       <main class="a2-root a2-editorial" aria-label="${PRODUCT_NAME} Arena">
         <header class="a2-topbar" id="a2-topbar"></header>
-        <div class="a2-body ${this.sidebarCollapsed ? 'sidebar-collapsed' : ''}">
+        <div class="a2-body">
+          <div class="a2-scrim" id="a2-scrim" data-a2-action="close-panels" aria-hidden="true"></div>
           <aside class="a2-sidebar" id="a2-sidebar"></aside>
           <section class="a2-theater" id="a2-theater">
             <header class="a2-theater-head" id="a2-theater-head"></header>
@@ -231,6 +306,9 @@ export class ArenaApp2 {
       if (action === 'timeline') this.selectDay(Number(target.dataset.dayIndex ?? 0));
       if (action === 'tab') this.setTab(target.dataset.tab as DetailTab);
       if (action === 'toggle-sidebar') this.toggleSidebar();
+      if (action === 'toggle-detail') this.toggleDetailPanel();
+      if (action === 'close-panels') this.closeMobilePanels();
+      if (action === 'open-replays') this.openReplayDrawer();
       if (action === 'intro-browse-replays') this.dismissIntro('replays');
       if (action === 'intro-leaderboard') this.dismissIntro('scoreboard');
       if (action === 'retry-backend') {
@@ -290,8 +368,10 @@ export class ArenaApp2 {
 
   private toggleSidebar() {
     this.sidebarCollapsed = !this.sidebarCollapsed;
-    this.root.querySelector('.a2-body')?.classList.toggle('sidebar-collapsed', this.sidebarCollapsed);
+    if (this.isMobileWatch() && !this.sidebarCollapsed) this.detailPanelOpen = false;
+    this.syncLayoutClasses();
     this.renderSidebar();
+    this.renderHud(this.run?.days[this.activeDayIndex]);
   }
 
   private async loadStoredReplay(runId: string) {
@@ -311,8 +391,17 @@ export class ArenaApp2 {
       this.statusMessage = `Loaded ${modelLabel(this.run.days[0].model, this.modelPresets)} — ${this.run.days.length} days ready. Press Play Day 01 to watch.`;
       this.sidebarSection = 'replays';
       this.clearStageOverlay();
-      if (this.playbackMode === 'auto') void this.playNextUnplayedDay();
-      else this.renderAll();
+      if (this.isMobileWatch()) {
+        this.sidebarCollapsed = true;
+        this.detailPanelOpen = false;
+        this.syncLayoutClasses();
+        this.renderAll();
+        void this.playActiveDay();
+      } else if (this.playbackMode === 'auto') {
+        void this.playNextUnplayedDay();
+      } else {
+        this.renderAll();
+      }
     } catch (error) {
       this.statusError = true;
       this.statusMessage = error instanceof Error ? error.message : String(error);
@@ -360,6 +449,7 @@ export class ArenaApp2 {
   }
 
   private renderAll() {
+    this.syncLayoutClasses();
     this.renderTheaterChrome();
     this.renderHud(this.run?.days[this.activeDayIndex]);
     this.renderSidebar();
@@ -557,6 +647,36 @@ export class ArenaApp2 {
         ? 'offline'
         : 'pending';
 
+    if (this.isMobileWatch()) {
+      const dayLabel = day
+        ? `Day ${pad(day.day)} / ${pad(day.maxDays)}`
+        : this.run
+          ? `${this.run.days.length} days loaded`
+          : 'Pick a replay';
+      const modelName = displayModel ? modelLabel(displayModel, this.modelPresets) : PRODUCT_NAME;
+
+      this.requireElement('a2-topbar').innerHTML = `
+        <button class="a2-mobile-bar-btn" data-a2-action="toggle-sidebar" type="button" aria-label="Browse replays">
+          <span class="a2-mobile-bar-icon">☰</span>
+          <span>Replays</span>
+        </button>
+        <div class="a2-mobile-bar-center">
+          <strong>${escapeHtml(dayLabel)}</strong>
+          <span>${escapeHtml(modelName)}</span>
+        </div>
+        <button
+          class="a2-mobile-bar-btn ${this.detailPanelOpen ? 'active' : ''}"
+          data-a2-action="toggle-detail"
+          type="button"
+          aria-label="Day details"
+          ${day ? '' : 'disabled'}
+        >
+          <span>Details</span>
+        </button>
+      `;
+      return;
+    }
+
     this.requireElement('a2-topbar').innerHTML = `
       <div class="a2-brand">
         <button class="a2-sidebar-toggle" data-a2-action="toggle-sidebar" type="button" aria-label="Toggle sidebar">☰</button>
@@ -691,6 +811,11 @@ export class ArenaApp2 {
     const hasNext = Boolean(this.run && this.activeDayIndex + 1 < this.run.days.length);
     const hasPrev = this.activeDayIndex > 0;
 
+    const mobile = this.isMobileWatch();
+    const noDayAction = mobile ? 'open-replays' : '';
+    const noDayLabel = mobile ? 'Pick replay' : 'Load a replay';
+    const noDayHint = mobile ? 'tap to browse' : 'from the sidebar';
+
     this.requireElement('a2-transport').innerHTML = `
       <div class="a2-transport-label">
         <span>Playback</span>
@@ -698,11 +823,11 @@ export class ArenaApp2 {
       </div>
       <div class="a2-transport-main">
         <button class="a2-transport-btn" data-a2-action="prev-day" type="button" ${!hasPrev || this.playing ? 'disabled' : ''} title="Previous day (←)" aria-label="Previous day">◀</button>
-        <button class="a2-transport-primary ${day && !this.playing ? 'ready' : ''}" data-a2-action="${day ? (this.playing ? 'pause' : 'simulate') : ''}" type="button" ${!day ? 'disabled' : ''}>
+        <button class="a2-transport-primary ${day && !this.playing ? 'ready' : ''} ${!day && mobile ? 'pick-replay' : ''}" data-a2-action="${day ? (this.playing ? 'pause' : 'simulate') : noDayAction}" type="button">
           <span class="a2-transport-primary-icon">${day ? (this.playing ? (this.paused ? '▶' : '⏸') : '▶') : '▶'}</span>
           <span class="a2-transport-primary-text">
-            <strong>${day ? (this.playing ? (this.paused ? 'Resume' : 'Pause') : dayPlayed ? 'Replay Day' : 'Play Day') : 'Load a replay'}</strong>
-            <em>${day ? pad(day.day) : 'from the sidebar'}</em>
+            <strong>${day ? (this.playing ? (this.paused ? 'Resume' : 'Pause') : dayPlayed ? 'Replay Day' : 'Play Day') : noDayLabel}</strong>
+            <em>${day ? pad(day.day) : noDayHint}</em>
           </span>
         </button>
         <button class="a2-transport-btn" data-a2-action="next-day" type="button" ${!hasNext || this.playing ? 'disabled' : ''} title="Next day (→)" aria-label="Next day">▶</button>
@@ -980,6 +1105,11 @@ export class ArenaApp2 {
     this.statusMessage = section === 'replays'
       ? `${this.allReplaySummaries().length} saved replays — click one, then press Play Day.`
       : 'Compare completed 30-day runs — click a row to load a replay.';
+    if (this.isMobileWatch()) {
+      this.sidebarCollapsed = false;
+      this.detailPanelOpen = false;
+      this.syncLayoutClasses();
+    }
     this.renderSidebar();
     this.renderTheaterChrome();
     this.renderHud();

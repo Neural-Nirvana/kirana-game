@@ -1044,3 +1044,56 @@
   border-color: var(--a2-line);
   color: var(--a2-ink);
 }
+
+/* ── Mobile Watch (editorial) ── */
+@media (max-width: 768px) {
+  .a2-editorial.a2-mobile-watch .a2-topbar {
+    background: rgba(255, 253, 248, 0.94);
+    box-shadow: 0 2px 16px rgba(28, 21, 16, 0.06);
+  }
+
+  .a2-editorial.a2-mobile-watch .a2-mobile-bar-btn {
+    border-color: var(--a2-line);
+    background: var(--a2-paper);
+    color: var(--a2-ink);
+  }
+
+  .a2-editorial.a2-mobile-watch .a2-mobile-bar-btn.active {
+    border-color: rgba(217, 119, 6, 0.4);
+    background: rgba(217, 119, 6, 0.1);
+    color: var(--a2-terracotta);
+  }
+
+  .a2-editorial.a2-mobile-watch .a2-mobile-bar-center strong {
+    color: var(--a2-ink);
+  }
+
+  .a2-editorial.a2-mobile-watch .a2-mobile-bar-center span {
+    color: var(--a2-ink-muted);
+  }
+
+  .a2-editorial.a2-mobile-watch .a2-sidebar {
+    background: var(--a2-paper);
+    border-right-color: var(--a2-line);
+  }
+
+  .a2-editorial.a2-mobile-watch .a2-detail {
+    background: var(--a2-paper);
+    border-top-color: var(--a2-line);
+  }
+
+  .a2-editorial.a2-mobile-watch .a2-scrim.visible {
+    background: rgba(28, 21, 16, 0.4);
+  }
+
+  .a2-editorial.a2-mobile-watch .a2-transport {
+    border-color: var(--a2-line);
+    background: var(--a2-paper);
+  }
+
+  .a2-editorial.a2-mobile-watch .a2-transport-primary.pick-replay {
+    border-color: rgba(217, 119, 6, 0.45);
+    background: rgba(217, 119, 6, 0.12);
+    color: var(--a2-terracotta);
+  }
+}
