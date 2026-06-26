@@ -70,6 +70,7 @@ describe('arena-mobile-layout', () => {
       desktopSidebarCollapsed: true,
     });
     assert.ok(portrait.root.includes('a2-mobile-watch'));
+    assert.ok(portrait.root.includes('a2-mobile-portrait'));
     assert.ok(!portrait.root.includes('a2-mobile-cinema'));
     assert.ok(portrait.body.includes('sidebar-open'));
     assert.equal(portrait.scrimVisible, true);

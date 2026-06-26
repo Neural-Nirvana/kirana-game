@@ -61,6 +61,9 @@ export function computeMobileLayoutClasses(input: MobileLayoutInput): MobileLayo
 
   if (mobile) {
     root.push('a2-mobile-watch');
+    if (!cinema && !input.fullscreen && input.viewportHeight >= input.viewportWidth) {
+      root.push('a2-mobile-portrait');
+    }
     if (cinema || input.fullscreen) root.push('a2-mobile-cinema');
     if (input.fullscreen) root.push('a2-fullscreen-active');
 

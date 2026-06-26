@@ -2267,23 +2267,34 @@
     text-overflow: ellipsis;
   }
 
-  .a2-mobile-watch:not(.a2-mobile-cinema) .a2-stage-cinema {
+  .a2-mobile-watch.a2-mobile-portrait:not(.a2-mobile-cinema) .a2-stage-cinema {
     flex: 1;
     min-height: 0;
-    padding: 4px 6px 2px;
-    align-items: stretch;
-    justify-content: stretch;
+    padding: 0;
+    align-items: center;
+    justify-content: center;
+    background:
+      radial-gradient(circle at 50% 18%, rgba(245, 196, 81, 0.08), transparent 42%),
+      #060d18;
   }
 
-  .a2-mobile-watch:not(.a2-mobile-cinema) .a2-stage-frame {
-    flex: 1;
+  .a2-mobile-watch.a2-mobile-portrait:not(.a2-mobile-cinema) .a2-stage-frame {
     width: 100%;
-    height: 100%;
-    max-width: 100%;
+    height: auto;
     max-height: 100%;
+    max-width: 100%;
+    aspect-ratio: 9 / 16;
+    flex: 0 1 auto;
     min-height: 0;
-    aspect-ratio: auto;
-    border-radius: 10px;
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+    box-shadow: none;
+  }
+
+  .a2-mobile-watch.a2-mobile-portrait:not(.a2-mobile-cinema) .a2-stage-glow,
+  .a2-mobile-watch.a2-mobile-portrait:not(.a2-mobile-cinema) .a2-stage-vignette {
+    border-radius: 0;
   }
 
   .a2-mobile-watch .a2-transport-deck {

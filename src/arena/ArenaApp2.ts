@@ -8,6 +8,7 @@ import emptyStateUrl from '../assets/arena2/empty-state.jpg';
 import { adaptAiReplay } from './arena-adapter';
 import { filterOfficialBenchmarkRows } from './benchmark-roster';
 import { initProviderLogoFallbacks, renderBenchmarkModelCell } from './provider-brand';
+import { resolveArenaStageMode, type ArenaStageMode } from './arena-stage-layout';
 import { ArenaStage } from './ArenaStage';
 import * as arenaMobileLayout from './arena-mobile-layout';
 import {
@@ -79,6 +80,7 @@ type SidebarSection = 'replays' | 'scoreboard';
 export class ArenaApp2 {
   private readonly root: HTMLElement;
   private stage?: ArenaStage;
+  private stageMode: ArenaStageMode = 'desktop';
   private run?: ArenaReplayRun;
   private activeDayIndex = 0;
   private speed = 5;
@@ -122,7 +124,7 @@ export class ArenaApp2 {
     window.addEventListener('resize', () => this.handleResize());
     document.addEventListener('fullscreenchange', () => this.handleFullscreenChange());
     this.stage = new ArenaStage(this.requireElement('a2-stage'), (metrics) => this.updateLiveMetrics(metrics));
-    this.stage.mount(undefined);
+    this.ensureStageMode();
     this.renderAll();
     this.publishVerifyHooks();
     this.showIntroOverlay('loading');
@@ -167,7 +169,7 @@ export class ArenaApp2 {
       this.applyMobilePanelState(panelsForCinemaEntry(this.mobilePanelState()));
     }
     this.syncLayoutClasses();
-    this.refreshStageLayout();
+    this.ensureStageMode();
     this.renderHud(this.run?.days[this.activeDayIndex]);
     this.renderTransport();
   }
@@ -179,9 +181,30 @@ export class ArenaApp2 {
       this.applyMobilePanelState(closedMobilePanels());
     }
     this.syncLayoutClasses();
-    this.refreshStageLayout();
+    this.ensureStageMode();
     this.renderHud(this.run?.days[this.activeDayIndex]);
     this.renderTransport();
+  }
+
+  private resolveStageMode(): ArenaStageMode {
+    return resolveArenaStageMode(window.innerWidth, window.innerHeight, {
+      cinema: this.isMobileCinema(),
+      fullscreen: this.fullscreenActive,
+    });
+  }
+
+  private ensureStageMode() {
+    const nextMode = this.resolveStageMode();
+    if (this.stage && nextMode === this.stageMode) {
+      this.refreshStageLayout();
+      return;
+    }
+    const day = this.run?.days[this.activeDayIndex];
+    this.stage?.destroy();
+    this.stageMode = nextMode;
+    this.stage = new ArenaStage(this.requireElement('a2-stage'), (metrics) => this.updateLiveMetrics(metrics));
+    this.stage.mount(day, nextMode);
+    this.refreshStageLayout();
   }
 
   private refreshStageLayout() {

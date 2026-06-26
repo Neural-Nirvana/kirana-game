@@ -11,7 +11,8 @@ import { parseArgs } from 'node:util';
 const require = createRequire(import.meta.url);
 const { chromium } = require('playwright');
 
-const STAGE_ASPECT = 1600 / 560;
+const DESKTOP_STAGE_ASPECT = 1600 / 560;
+const PORTRAIT_STAGE_ASPECT = 9 / 16;
 const SCRATCH_DEFAULT = process.env.ARENA_MOBILE_SCRATCH
   ?? '/var/folders/n0/h5ddqnwn5jbd8y0lclpvqs_m0000gn/T/grok-goal-4e0fa7740486/implementer';
 
@@ -63,13 +64,18 @@ function assert(condition, message) {
 
 function assertPortraitStage(metrics, viewportWidth, viewportHeight, label) {
   assert(metrics.stageWidth >= viewportWidth * 0.92, `${label}: stage width ${metrics.stageWidth} < 92% viewport`);
+  const frameAspect = metrics.stageWidth / metrics.stageHeight;
   assert(
-    metrics.stageHeight >= viewportHeight * 0.52,
-    `${label}: stage height ${metrics.stageHeight} should fill portrait viewport (min ${Math.round(viewportHeight * 0.52)}px)`,
+    Math.abs(frameAspect - PORTRAIT_STAGE_ASPECT) < 0.08,
+    `${label}: portrait frame aspect ${frameAspect.toFixed(3)} expected ~${PORTRAIT_STAGE_ASPECT.toFixed(3)}`,
   );
   assert(
-    metrics.stageHeight > viewportWidth * 0.34,
-    `${label}: portrait stage still height-limited at ${metrics.stageHeight}px`,
+    metrics.canvasWidth === 540 && metrics.canvasHeight === 960,
+    `${label}: expected native portrait canvas 540x960, got ${metrics.canvasWidth}x${metrics.canvasHeight}`,
+  );
+  assert(
+    metrics.stageHeight >= viewportHeight * 0.45,
+    `${label}: portrait stage height ${metrics.stageHeight} too short for viewport`,
   );
 }
 
@@ -173,6 +179,7 @@ async function runPass(page, base, runId, passLabel, log) {
 
   const portrait = await page.evaluate(() => {
     const frame = document.querySelector('.a2-stage-frame');
+    const canvas = document.querySelector('#a2-stage canvas');
     const rect = frame?.getBoundingClientRect();
     return {
       mobileWatch: document.querySelector('.a2-root')?.classList.contains('a2-mobile-watch') ?? false,
@@ -180,8 +187,11 @@ async function runPass(page, base, runId, passLabel, log) {
       hasScrim: Boolean(document.querySelector('#a2-scrim')),
       hasSheetHandle: Boolean(document.querySelector('.a2-detail-sheet-handle')),
       hasFullscreenBtn: Boolean(document.querySelector('[data-a2-action="toggle-fullscreen"]')),
+      hasPortraitClass: document.querySelector('.a2-root')?.classList.contains('a2-mobile-portrait') ?? false,
       stageWidth: rect?.width ?? 0,
       stageHeight: rect?.height ?? 0,
+      canvasWidth: canvas?.width ?? 0,
+      canvasHeight: canvas?.height ?? 0,
       viewportWidth: window.innerWidth,
       viewportHeight: window.innerHeight,
     };
@@ -189,6 +199,7 @@ async function runPass(page, base, runId, passLabel, log) {
 
   lines.push(`portrait: ${JSON.stringify(portrait)}`);
   assert(portrait.mobileWatch, 'missing a2-mobile-watch');
+  assert(portrait.hasPortraitClass, 'missing a2-mobile-portrait');
   assert(portrait.hasTopBar, 'missing mobile top bar');
   assert(portrait.hasScrim, 'missing scrim');
   assert(portrait.hasFullscreenBtn, 'missing fullscreen control');
@@ -233,11 +244,14 @@ async function runPass(page, base, runId, passLabel, log) {
   const landscape = await page.evaluate(() => {
     const root = document.querySelector('.a2-root');
     const frame = document.querySelector('.a2-stage-frame');
+    const canvas = document.querySelector('#a2-stage canvas');
     const rect = frame?.getBoundingClientRect();
     return {
       cinema: root?.classList.contains('a2-mobile-cinema') ?? false,
       stageWidth: rect?.width ?? 0,
       stageHeight: rect?.height ?? 0,
+      canvasWidth: canvas?.width ?? 0,
+      canvasHeight: canvas?.height ?? 0,
       viewportWidth: window.innerWidth,
       viewportArea: window.innerWidth * window.innerHeight,
       stageArea: (rect?.width ?? 0) * (rect?.height ?? 0),
@@ -252,6 +266,10 @@ async function runPass(page, base, runId, passLabel, log) {
   assert(
     portrait.stageHeight > landscape.stageHeight,
     `portrait stage should use more vertical space (${portrait.stageHeight} vs ${landscape.stageHeight})`,
+  );
+  assert(
+    landscape.canvasWidth === 1600 && landscape.canvasHeight === 560,
+    `landscape should use desktop canvas, got ${landscape.canvasWidth}x${landscape.canvasHeight}`,
   );
   assertCinemaStage(landscape, landscape.viewportWidth, 390, 'landscape');
   assert(landscape.stageArea / landscape.viewportArea > 0.55, 'cinema stage should dominate viewport');
