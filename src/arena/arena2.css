@@ -2312,13 +2312,19 @@
   }
 
   .a2-mobile-watch .a2-detail-layout {
+    display: flex;
     flex-direction: column;
-    height: 100%;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
   }
 
   .a2-mobile-watch .a2-detail-panel {
+    display: flex;
+    flex-direction: column;
     flex: 1;
     min-height: 0;
+    overflow: hidden;
   }
 
   .a2-mobile-watch .a2-overlay-card {
@@ -2371,6 +2377,10 @@
   }
 
   .a2-mobile-watch .a2-detail-body {
+    flex: 1;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     overscroll-behavior: contain;
     padding: 10px 12px 16px;

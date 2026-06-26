@@ -8,6 +8,7 @@ import { adaptAiReplay } from './arena-adapter';
 import { filterOfficialBenchmarkRows } from './benchmark-roster';
 import { initProviderLogoFallbacks, renderBenchmarkModelCell } from './provider-brand';
 import { ArenaStage } from './ArenaStage';
+import * as arenaMobileLayout from './arena-mobile-layout';
 import {
   closedMobilePanels,
   computeMobileLayoutClasses,
@@ -19,6 +20,19 @@ import {
   panelsForCinemaEntry,
   type MobilePanelState,
 } from './arena-mobile-layout';
+
+const ARENA_SHELL_IDS = ['a2-topbar', 'a2-sidebar', 'a2-theater', 'a2-stage', 'a2-detail', 'a2-scrim'] as const;
+
+declare global {
+  interface Window {
+    __dukaanbenchArenaVerify?: {
+      shellIds: readonly string[];
+      shellReady: () => boolean;
+      mobileLayout: typeof arenaMobileLayout;
+      panelState: () => MobilePanelState;
+    };
+  }
+}
 import {
   actionIcon,
   AUTO_ADVANCE_DELAY_MS,
@@ -109,8 +123,18 @@ export class ArenaApp2 {
     this.stage = new ArenaStage(this.requireElement('a2-stage'), (metrics) => this.updateLiveMetrics(metrics));
     this.stage.mount(undefined);
     this.renderAll();
+    this.publishVerifyHooks();
     this.showIntroOverlay('loading');
     void this.bootstrap();
+  }
+
+  private publishVerifyHooks() {
+    window.__dukaanbenchArenaVerify = {
+      shellIds: ARENA_SHELL_IDS,
+      shellReady: () => ARENA_SHELL_IDS.every((id) => Boolean(document.getElementById(id))),
+      mobileLayout: arenaMobileLayout,
+      panelState: () => this.mobilePanelState(),
+    };
   }
 
   private isMobileWatch() {

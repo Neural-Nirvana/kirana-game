@@ -79,3 +79,26 @@ export function computeMobileLayoutClasses(input: MobileLayoutInput): MobileLayo
 export function panelsForCinemaEntry(_panels: MobilePanelState): MobilePanelState {
   return closedMobilePanels();
 }
+
+export type LayoutStateOp = 'openDrawer' | 'toggleDetail' | 'closePanels' | 'enterCinema';
+
+export function runLayoutStateSequence(
+  viewport: { width: number; height: number },
+  ops: LayoutStateOp[],
+  desktopSidebarCollapsed = true,
+) {
+  let panels = closedMobilePanels();
+  return ops.map((op) => {
+    if (op === 'openDrawer') panels = openReplayDrawerState();
+    if (op === 'toggleDetail') panels = nextStateOnToggleDetail(panels);
+    if (op === 'closePanels') panels = closedMobilePanels();
+    if (op === 'enterCinema') panels = panelsForCinemaEntry(panels);
+    return computeMobileLayoutClasses({
+      viewportWidth: viewport.width,
+      viewportHeight: viewport.height,
+      panels,
+      fullscreen: false,
+      desktopSidebarCollapsed,
+    });
+  });
+}

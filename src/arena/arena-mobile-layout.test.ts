@@ -10,6 +10,7 @@ import {
   nextStateOnToggleSidebar,
   openReplayDrawerState,
   panelsForCinemaEntry,
+  runLayoutStateSequence,
 } from './arena-mobile-layout.ts';
 
 describe('arena-mobile-layout', () => {
@@ -108,6 +109,33 @@ describe('arena-mobile-layout', () => {
     assert.ok(fs.root.includes('a2-fullscreen-active'));
     assert.ok(fs.root.includes('a2-mobile-cinema'));
     assert.equal(fs.scrimVisible, false);
+  });
+
+  it('runs the no-run → drawer → detail → close state machine on a mock viewport', () => {
+    const viewport = { width: 390, height: 844 };
+    const trace = runLayoutStateSequence(viewport, [
+      'openDrawer',
+      'toggleDetail',
+      'closePanels',
+    ]);
+
+    assert.equal(trace.length, 3);
+    assert.ok(trace[0].body.includes('sidebar-open'));
+    assert.ok(!trace[0].body.includes('detail-open'));
+    assert.ok(trace[1].body.includes('detail-open'));
+    assert.ok(!trace[1].body.includes('sidebar-open'));
+    assert.deepEqual(trace[2].body, []);
+    assert.equal(trace[2].scrimVisible, false);
+  });
+
+  it('runs cinema entry after open panels on landscape viewport', () => {
+    const trace = runLayoutStateSequence(
+      { width: 844, height: 390 },
+      ['openDrawer', 'toggleDetail', 'enterCinema'],
+    );
+    assert.ok(trace[2].root.includes('a2-mobile-cinema'));
+    assert.equal(trace[2].scrimVisible, false);
+    assert.deepEqual(trace[2].body, []);
   });
 
   it('desktop layout only toggles sidebar-collapsed', () => {

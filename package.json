@@ -12,7 +12,7 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "test": "tsx --test src/arena/arena-mobile-layout.test.ts",
-    "test:arena-mobile": "npm run build && npm run test && node scripts/verify-arena-mobile.mjs"
+    "test:arena-mobile": "npm run build && npm run test && node scripts/verify-arena-mobile.mjs --bases=local,prod"
   },
   "devDependencies": {
     "playwright": "^1.61.1",
